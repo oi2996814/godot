@@ -5,7 +5,7 @@ import os.path
 import shlex
 import subprocess
 from dataclasses import dataclass
-from typing import Optional, List
+from typing import List, Optional
 
 
 def find_dotnet_cli():
@@ -151,7 +151,7 @@ def find_any_msbuild_tool(mono_prefix):
     return None
 
 
-def run_msbuild(tools: ToolsLocation, sln: str, msbuild_args: Optional[List[str]] = None):
+def run_msbuild(tools: ToolsLocation, sln: str, chdir_to: str, msbuild_args: Optional[List[str]] = None):
     using_msbuild_mono = False
 
     # Preference order: dotnet CLI > Standalone MSBuild > Mono's MSBuild
@@ -190,10 +190,11 @@ def run_msbuild(tools: ToolsLocation, sln: str, msbuild_args: Optional[List[str]
             }
         )
 
-    return subprocess.call(args, env=msbuild_env)
+    # We want to control cwd when running msbuild, because that's where the search for global.json begins.
+    return subprocess.call(args, env=msbuild_env, cwd=chdir_to)
 
 
-def build_godot_api(msbuild_tool, module_dir, output_dir, push_nupkgs_local, float_size):
+def build_godot_api(msbuild_tool, module_dir, output_dir, push_nupkgs_local, precision, no_deprecated, werror):
     target_filenames = [
         "GodotSharp.dll",
         "GodotSharp.pdb",
@@ -214,15 +215,15 @@ def build_godot_api(msbuild_tool, module_dir, output_dir, push_nupkgs_local, flo
         args = ["/restore", "/t:Build", "/p:Configuration=" + build_config, "/p:NoWarn=1591"]
         if push_nupkgs_local:
             args += ["/p:ClearNuGetLocalCache=true", "/p:PushNuGetToLocalSource=" + push_nupkgs_local]
-        if float_size == "64":
+        if precision == "double":
             args += ["/p:GodotFloat64=true"]
+        if no_deprecated:
+            args += ["/p:GodotNoDeprecated=true"]
+        if werror:
+            args += ["/p:TreatWarningsAsErrors=true"]
 
         sln = os.path.join(module_dir, "glue/GodotSharp/GodotSharp.sln")
-        exit_code = run_msbuild(
-            msbuild_tool,
-            sln=sln,
-            msbuild_args=args,
-        )
+        exit_code = run_msbuild(msbuild_tool, sln=sln, chdir_to=module_dir, msbuild_args=args)
         if exit_code != 0:
             return exit_code
 
@@ -230,7 +231,7 @@ def build_godot_api(msbuild_tool, module_dir, output_dir, push_nupkgs_local, flo
 
         core_src_dir = os.path.abspath(os.path.join(sln, os.pardir, "GodotSharp", "bin", build_config))
         editor_src_dir = os.path.abspath(os.path.join(sln, os.pardir, "GodotSharpEditor", "bin", build_config))
-        plugins_src_dir = os.path.abspath(os.path.join(sln, os.pardir, "GodotPlugins", "bin", build_config, "net6.0"))
+        plugins_src_dir = os.path.abspath(os.path.join(sln, os.pardir, "GodotPlugins", "bin", build_config, "net8.0"))
 
         if not os.path.isdir(editor_api_dir):
             assert not os.path.isfile(editor_api_dir)
@@ -256,9 +257,99 @@ def build_godot_api(msbuild_tool, module_dir, output_dir, push_nupkgs_local, flo
     return 0
 
 
-def build_all(msbuild_tool, module_dir, output_dir, godot_platform, dev_debug, push_nupkgs_local, float_size):
+def generate_sdk_package_versions():
+    # I can't believe importing files in Python is so convoluted when not
+    # following the golden standard for packages/modules.
+    import os
+    import sys
+    from os.path import dirname
+
+    # We want ../../../methods.py.
+    script_path = dirname(os.path.abspath(__file__))
+    root_path = dirname(dirname(dirname(script_path)))
+
+    sys.path.insert(0, root_path)
+    from methods import get_version_info
+
+    version_info = get_version_info("")
+    sys.path.remove(root_path)
+
+    version_str = "{major}.{minor}.{patch}".format(**version_info)
+    version_status = version_info["status"]
+    if version_status != "stable":  # Pre-release
+        # If version was overridden to be e.g. "beta3", we insert a dot between
+        # "beta" and "3" to follow SemVer 2.0.
+        import re
+
+        match = re.search(r"[\d]+$", version_status)
+        if match:
+            pos = match.start()
+            version_status = version_status[:pos] + "." + version_status[pos:]
+        version_str += "-" + version_status
+
+    import version
+
+    version_defines = (
+        [
+            f"GODOT{version.major}",
+            f"GODOT{version.major}_{version.minor}",
+            f"GODOT{version.major}_{version.minor}_{version.patch}",
+        ]
+        + [f"GODOT{v}_OR_GREATER" for v in range(4, version.major + 1)]
+        + [f"GODOT{version.major}_{v}_OR_GREATER" for v in range(0, version.minor + 1)]
+        + [f"GODOT{version.major}_{version.minor}_{v}_OR_GREATER" for v in range(0, version.patch + 1)]
+    )
+
+    props = """<Project>
+  <PropertyGroup>
+    <PackageVersion_GodotSharp>{0}</PackageVersion_GodotSharp>
+    <PackageVersion_Godot_NET_Sdk>{0}</PackageVersion_Godot_NET_Sdk>
+    <PackageVersion_Godot_SourceGenerators>{0}</PackageVersion_Godot_SourceGenerators>
+    <GodotVersionConstants>{1}</GodotVersionConstants>
+  </PropertyGroup>
+</Project>
+""".format(version_str, ";".join(version_defines))
+
+    # We write in ../SdkPackageVersions.props.
+    with open(os.path.join(dirname(script_path), "SdkPackageVersions.props"), "w", encoding="utf-8", newline="\n") as f:
+        f.write(props)
+
+    # Also write the versioned docs URL to a constant for the Source Generators.
+
+    constants = """namespace Godot.SourceGenerators
+{{
+// TODO: This is currently disabled because of https://github.com/dotnet/roslyn/issues/52904
+#pragma warning disable IDE0040 // Add accessibility modifiers.
+    partial class Common
+    {{
+        public const string VersionDocsUrl = "https://docs.godotengine.org/en/{docs_branch}";
+    }}
+}}
+""".format(**version_info)
+
+    generators_dir = os.path.join(
+        dirname(script_path),
+        "editor",
+        "Godot.NET.Sdk",
+        "Godot.SourceGenerators",
+        "Generated",
+    )
+    os.makedirs(generators_dir, exist_ok=True)
+
+    with open(os.path.join(generators_dir, "Common.Constants.cs"), "w", encoding="utf-8", newline="\n") as f:
+        f.write(constants)
+
+
+def build_all(
+    msbuild_tool, module_dir, output_dir, godot_platform, dev_debug, push_nupkgs_local, precision, no_deprecated, werror
+):
+    # Generate SdkPackageVersions.props and VersionDocsUrl constant
+    generate_sdk_package_versions()
+
     # Godot API
-    exit_code = build_godot_api(msbuild_tool, module_dir, output_dir, push_nupkgs_local, float_size)
+    exit_code = build_godot_api(
+        msbuild_tool, module_dir, output_dir, push_nupkgs_local, precision, no_deprecated, werror
+    )
     if exit_code != 0:
         return exit_code
 
@@ -269,9 +360,9 @@ def build_all(msbuild_tool, module_dir, output_dir, godot_platform, dev_debug, p
     )
     if push_nupkgs_local:
         args += ["/p:ClearNuGetLocalCache=true", "/p:PushNuGetToLocalSource=" + push_nupkgs_local]
-    if float_size == "64":
+    if precision == "double":
         args += ["/p:GodotFloat64=true"]
-    exit_code = run_msbuild(msbuild_tool, sln=sln, msbuild_args=args)
+    exit_code = run_msbuild(msbuild_tool, sln=sln, chdir_to=module_dir, msbuild_args=args)
     if exit_code != 0:
         return exit_code
 
@@ -279,10 +370,12 @@ def build_all(msbuild_tool, module_dir, output_dir, godot_platform, dev_debug, p
     args = ["/restore", "/t:Build", "/p:Configuration=Release"]
     if push_nupkgs_local:
         args += ["/p:ClearNuGetLocalCache=true", "/p:PushNuGetToLocalSource=" + push_nupkgs_local]
-    if float_size == "64":
+    if precision == "double":
         args += ["/p:GodotFloat64=true"]
+    if no_deprecated:
+        args += ["/p:GodotNoDeprecated=true"]
     sln = os.path.join(module_dir, "editor/Godot.NET.Sdk/Godot.NET.Sdk.sln")
-    exit_code = run_msbuild(msbuild_tool, sln=sln, msbuild_args=args)
+    exit_code = run_msbuild(msbuild_tool, sln=sln, chdir_to=module_dir, msbuild_args=args)
     if exit_code != 0:
         return exit_code
 
@@ -304,7 +397,16 @@ def main():
     parser.add_argument("--godot-platform", type=str, default="")
     parser.add_argument("--mono-prefix", type=str, default="")
     parser.add_argument("--push-nupkgs-local", type=str, default="")
-    parser.add_argument("--float", type=str, default="32", choices=["32", "64"], help="Floating-point precision")
+    parser.add_argument(
+        "--precision", type=str, default="single", choices=["single", "double"], help="Floating-point precision level"
+    )
+    parser.add_argument(
+        "--no-deprecated",
+        action="store_true",
+        default=False,
+        help="Build GodotSharp without using deprecated features. This is required, if the engine was built with 'deprecated=no'.",
+    )
+    parser.add_argument("--werror", action="store_true", default=False, help="Treat compiler warnings as errors.")
 
     args = parser.parse_args()
 
@@ -328,7 +430,9 @@ def main():
         args.godot_platform,
         args.dev_debug,
         push_nupkgs_local,
-        args.float,
+        args.precision,
+        args.no_deprecated,
+        args.werror,
     )
     sys.exit(exit_code)
 

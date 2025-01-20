@@ -1,32 +1,32 @@
-/*************************************************************************/
-/*  xr_nodes.cpp                                                         */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  xr_nodes.cpp                                                          */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #include "xr_nodes.h"
 
@@ -36,49 +36,37 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void XRCamera3D::_notification(int p_what) {
-	switch (p_what) {
-		case NOTIFICATION_ENTER_TREE: {
-			// need to find our XROrigin3D parent and let it know we're its camera!
-			XROrigin3D *origin = Object::cast_to<XROrigin3D>(get_parent());
-			if (origin != nullptr) {
-				origin->set_tracked_camera(this);
-			}
-		} break;
+void XRCamera3D::_bind_tracker() {
+	XRServer *xr_server = XRServer::get_singleton();
+	ERR_FAIL_NULL(xr_server);
 
-		case NOTIFICATION_EXIT_TREE: {
-			// need to find our XROrigin3D parent and let it know we're no longer its camera!
-			XROrigin3D *origin = Object::cast_to<XROrigin3D>(get_parent());
-			if (origin != nullptr && origin->get_tracked_camera() == this) {
-				origin->set_tracked_camera(nullptr);
-			}
-		} break;
-	}
-}
+	tracker = xr_server->get_tracker(tracker_name);
+	if (tracker.is_valid()) {
+		tracker->connect("pose_changed", callable_mp(this, &XRCamera3D::_pose_changed));
 
-void XRCamera3D::_changed_tracker(const StringName p_tracker_name, int p_tracker_type) {
-	if (p_tracker_name == tracker_name) {
-		XRServer *xr_server = XRServer::get_singleton();
-		ERR_FAIL_NULL(xr_server);
-
-		tracker = xr_server->get_tracker(p_tracker_name);
-		if (tracker.is_valid()) {
-			tracker->connect("pose_changed", callable_mp(this, &XRCamera3D::_pose_changed));
-
-			Ref<XRPose> pose = tracker->get_pose(pose_name);
-			if (pose.is_valid()) {
-				set_transform(pose->get_adjusted_transform());
-			}
+		Ref<XRPose> pose = tracker->get_pose(pose_name);
+		if (pose.is_valid()) {
+			set_transform(pose->get_adjusted_transform());
 		}
 	}
 }
 
-void XRCamera3D::_removed_tracker(const StringName p_tracker_name, int p_tracker_type) {
+void XRCamera3D::_unbind_tracker() {
+	if (tracker.is_valid()) {
+		tracker->disconnect("pose_changed", callable_mp(this, &XRCamera3D::_pose_changed));
+	}
+	tracker.unref();
+}
+
+void XRCamera3D::_changed_tracker(const StringName &p_tracker_name, int p_tracker_type) {
 	if (p_tracker_name == tracker_name) {
-		if (tracker.is_valid()) {
-			tracker->disconnect("pose_changed", callable_mp(this, &XRCamera3D::_pose_changed));
-		}
-		tracker.unref();
+		_bind_tracker();
+	}
+}
+
+void XRCamera3D::_removed_tracker(const StringName &p_tracker_name, int p_tracker_type) {
+	if (p_tracker_name == tracker_name) {
+		_unbind_tracker();
 	}
 }
 
@@ -89,18 +77,19 @@ void XRCamera3D::_pose_changed(const Ref<XRPose> &p_pose) {
 }
 
 PackedStringArray XRCamera3D::get_configuration_warnings() const {
-	PackedStringArray warnings = Node::get_configuration_warnings();
+	PackedStringArray warnings = Camera3D::get_configuration_warnings();
 
 	if (is_visible() && is_inside_tree()) {
-		// must be child node of XROrigin3D!
-		XROrigin3D *origin = Object::cast_to<XROrigin3D>(get_parent());
-		if (origin == nullptr) {
-			warnings.push_back(RTR("XRCamera3D must have an XROrigin3D node as its parent."));
+		// Warn if the node has a parent which isn't an XROrigin3D!
+		Node *parent = get_parent();
+		XROrigin3D *origin = Object::cast_to<XROrigin3D>(parent);
+		if (parent && origin == nullptr) {
+			warnings.push_back(RTR("XRCamera3D may not function as expected without an XROrigin3D node as its parent."));
 		};
 	}
 
 	return warnings;
-};
+}
 
 Vector3 XRCamera3D::project_local_ray_normal(const Point2 &p_pos) const {
 	// get our XRServer
@@ -125,7 +114,7 @@ Vector3 XRCamera3D::project_local_ray_normal(const Point2 &p_pos) const {
 	ray = Vector3(((cpos.x / viewport_size.width) * 2.0 - 1.0) * screen_he.x, ((1.0 - (cpos.y / viewport_size.height)) * 2.0 - 1.0) * screen_he.y, -get_near()).normalized();
 
 	return ray;
-};
+}
 
 Point2 XRCamera3D::unproject_position(const Vector3 &p_pos) const {
 	// get our XRServer
@@ -155,7 +144,7 @@ Point2 XRCamera3D::unproject_position(const Vector3 &p_pos) const {
 	res.y = (-p.normal.y * 0.5 + 0.5) * viewport_size.y;
 
 	return res;
-};
+}
 
 Vector3 XRCamera3D::project_position(const Point2 &p_point, real_t p_z_depth) const {
 	// get our XRServer
@@ -185,7 +174,7 @@ Vector3 XRCamera3D::project_position(const Point2 &p_point, real_t p_z_depth) co
 	Vector3 p(point.x, point.y, -p_z_depth);
 
 	return get_camera_transform().xform(p);
-};
+}
 
 Vector<Plane> XRCamera3D::get_frustum() const {
 	// get our XRServer
@@ -204,7 +193,7 @@ Vector<Plane> XRCamera3D::get_frustum() const {
 	// TODO Just use the first view for now, this is mostly for debugging so we may look into using our combined projection here.
 	Projection cm = xr_interface->get_projection_for_view(0, viewport_size.aspect(), get_near(), get_far());
 	return cm.get_projection_planes(get_camera_transform());
-};
+}
 
 XRCamera3D::XRCamera3D() {
 	XRServer *xr_server = XRServer::get_singleton();
@@ -213,6 +202,9 @@ XRCamera3D::XRCamera3D() {
 	xr_server->connect("tracker_added", callable_mp(this, &XRCamera3D::_changed_tracker));
 	xr_server->connect("tracker_updated", callable_mp(this, &XRCamera3D::_changed_tracker));
 	xr_server->connect("tracker_removed", callable_mp(this, &XRCamera3D::_removed_tracker));
+
+	// check if our tracker already exists and if so, bind it...
+	_bind_tracker();
 }
 
 XRCamera3D::~XRCamera3D() {
@@ -238,11 +230,17 @@ void XRNode3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_pose_name"), &XRNode3D::get_pose_name);
 	ADD_PROPERTY(PropertyInfo(Variant::STRING, "pose", PROPERTY_HINT_ENUM_SUGGESTION), "set_pose_name", "get_pose_name");
 
+	ClassDB::bind_method(D_METHOD("set_show_when_tracked", "show"), &XRNode3D::set_show_when_tracked);
+	ClassDB::bind_method(D_METHOD("get_show_when_tracked"), &XRNode3D::get_show_when_tracked);
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "show_when_tracked"), "set_show_when_tracked", "get_show_when_tracked");
+
 	ClassDB::bind_method(D_METHOD("get_is_active"), &XRNode3D::get_is_active);
 	ClassDB::bind_method(D_METHOD("get_has_tracking_data"), &XRNode3D::get_has_tracking_data);
 	ClassDB::bind_method(D_METHOD("get_pose"), &XRNode3D::get_pose);
 	ClassDB::bind_method(D_METHOD("trigger_haptic_pulse", "action_name", "frequency", "amplitude", "duration_sec", "delay_sec"), &XRNode3D::trigger_haptic_pulse);
-};
+
+	ADD_SIGNAL(MethodInfo("tracking_changed", PropertyInfo(Variant::BOOL, "tracking")));
+}
 
 void XRNode3D::_validate_property(PropertyInfo &p_property) const {
 	XRServer *xr_server = XRServer::get_singleton();
@@ -265,7 +263,7 @@ void XRNode3D::_validate_property(PropertyInfo &p_property) const {
 	}
 }
 
-void XRNode3D::set_tracker(const StringName p_tracker_name) {
+void XRNode3D::set_tracker(const StringName &p_tracker_name) {
 	if (tracker.is_valid() && tracker->get_tracker_name() == p_tracker_name) {
 		// didn't change
 		return;
@@ -276,7 +274,7 @@ void XRNode3D::set_tracker(const StringName p_tracker_name) {
 
 	// copy the name
 	tracker_name = p_tracker_name;
-	pose_name = "default";
+	pose_name = SceneStringName(default_);
 
 	// see if it's already available
 	_bind_tracker();
@@ -289,7 +287,7 @@ StringName XRNode3D::get_tracker() const {
 	return tracker_name;
 }
 
-void XRNode3D::set_pose_name(const StringName p_pose_name) {
+void XRNode3D::set_pose_name(const StringName &p_pose_name) {
 	pose_name = p_pose_name;
 
 	// Update pose if we are bound to a tracker with a valid pose
@@ -303,6 +301,16 @@ StringName XRNode3D::get_pose_name() const {
 	return pose_name;
 }
 
+void XRNode3D::set_show_when_tracked(bool p_show) {
+	show_when_tracked = p_show;
+
+	_update_visibility();
+}
+
+bool XRNode3D::get_show_when_tracked() const {
+	return show_when_tracked;
+}
+
 bool XRNode3D::get_is_active() const {
 	if (tracker.is_null()) {
 		return false;
@@ -314,13 +322,7 @@ bool XRNode3D::get_is_active() const {
 }
 
 bool XRNode3D::get_has_tracking_data() const {
-	if (tracker.is_null()) {
-		return false;
-	} else if (!tracker->has_pose(pose_name)) {
-		return false;
-	} else {
-		return tracker->get_pose(pose_name)->get_has_tracking_data();
-	}
+	return has_tracking_data;
 }
 
 void XRNode3D::trigger_haptic_pulse(const String &p_action_name, double p_frequency, double p_amplitude, double p_duration_sec, double p_delay_sec) {
@@ -355,10 +357,15 @@ void XRNode3D::_bind_tracker() {
 		}
 
 		tracker->connect("pose_changed", callable_mp(this, &XRNode3D::_pose_changed));
+		tracker->connect("pose_lost_tracking", callable_mp(this, &XRNode3D::_pose_lost_tracking));
 
 		Ref<XRPose> pose = get_pose();
 		if (pose.is_valid()) {
 			set_transform(pose->get_adjusted_transform());
+			_set_has_tracking_data(pose->get_has_tracking_data());
+		} else {
+			// Pose has been invalidated or was never set.
+			_set_has_tracking_data(false);
 		}
 	}
 }
@@ -366,13 +373,16 @@ void XRNode3D::_bind_tracker() {
 void XRNode3D::_unbind_tracker() {
 	if (tracker.is_valid()) {
 		tracker->disconnect("pose_changed", callable_mp(this, &XRNode3D::_pose_changed));
+		tracker->disconnect("pose_lost_tracking", callable_mp(this, &XRNode3D::_pose_lost_tracking));
 
 		tracker.unref();
+
+		_set_has_tracking_data(false);
 	}
 }
 
-void XRNode3D::_changed_tracker(const StringName p_tracker_name, int p_tracker_type) {
-	if (p_tracker_name == p_tracker_name) {
+void XRNode3D::_changed_tracker(const StringName &p_tracker_name, int p_tracker_type) {
+	if (tracker_name == p_tracker_name) {
 		// just in case unref our current tracker
 		_unbind_tracker();
 
@@ -381,8 +391,8 @@ void XRNode3D::_changed_tracker(const StringName p_tracker_name, int p_tracker_t
 	}
 }
 
-void XRNode3D::_removed_tracker(const StringName p_tracker_name, int p_tracker_type) {
-	if (p_tracker_name == p_tracker_name) {
+void XRNode3D::_removed_tracker(const StringName &p_tracker_name, int p_tracker_type) {
+	if (tracker_name == p_tracker_name) {
 		// unref our tracker, it's no longer available
 		_unbind_tracker();
 	}
@@ -391,6 +401,42 @@ void XRNode3D::_removed_tracker(const StringName p_tracker_name, int p_tracker_t
 void XRNode3D::_pose_changed(const Ref<XRPose> &p_pose) {
 	if (p_pose.is_valid() && p_pose->get_name() == pose_name) {
 		set_transform(p_pose->get_adjusted_transform());
+		_set_has_tracking_data(p_pose->get_has_tracking_data());
+	}
+}
+
+void XRNode3D::_pose_lost_tracking(const Ref<XRPose> &p_pose) {
+	if (p_pose.is_valid() && p_pose->get_name() == pose_name) {
+		_set_has_tracking_data(false);
+	}
+}
+
+void XRNode3D::_set_has_tracking_data(bool p_has_tracking_data) {
+	// Always update our visibility, we may have set our tracking data
+	// when conditions weren't right.
+	_update_visibility();
+
+	// Ignore if the has_tracking_data state isn't changing.
+	if (p_has_tracking_data == has_tracking_data) {
+		return;
+	}
+
+	// Handle change of has_tracking_data.
+	has_tracking_data = p_has_tracking_data;
+	emit_signal(SNAME("tracking_changed"), has_tracking_data);
+}
+
+void XRNode3D::_update_visibility() {
+	// If configured, show or hide the node based on tracking data.
+	if (show_when_tracked) {
+		// Only react to this if we have a primary interface.
+		XRServer *xr_server = XRServer::get_singleton();
+		if (xr_server != nullptr) {
+			Ref<XRInterface> xr_interface = xr_server->get_primary_interface();
+			if (xr_interface.is_valid()) {
+				set_visible(has_tracking_data);
+			}
+		}
 	}
 }
 
@@ -415,14 +461,15 @@ XRNode3D::~XRNode3D() {
 }
 
 PackedStringArray XRNode3D::get_configuration_warnings() const {
-	PackedStringArray warnings = Node::get_configuration_warnings();
+	PackedStringArray warnings = Node3D::get_configuration_warnings();
 
 	if (is_visible() && is_inside_tree()) {
-		// must be child node of XROrigin!
-		XROrigin3D *origin = Object::cast_to<XROrigin3D>(get_parent());
-		if (origin == nullptr) {
-			warnings.push_back(RTR("XRController3D must have an XROrigin3D node as its parent."));
-		}
+		// Warn if the node has a parent which isn't an XROrigin3D!
+		Node *parent = get_parent();
+		XROrigin3D *origin = Object::cast_to<XROrigin3D>(parent);
+		if (parent && origin == nullptr) {
+			warnings.push_back(RTR("XRNode3D may not function as expected without an XROrigin3D node as its parent."));
+		};
 
 		if (tracker_name == "") {
 			warnings.push_back(RTR("No tracker name is set."));
@@ -441,16 +488,18 @@ PackedStringArray XRNode3D::get_configuration_warnings() const {
 void XRController3D::_bind_methods() {
 	// passthroughs to information about our related joystick
 	ClassDB::bind_method(D_METHOD("is_button_pressed", "name"), &XRController3D::is_button_pressed);
-	ClassDB::bind_method(D_METHOD("get_value", "name"), &XRController3D::get_value);
-	ClassDB::bind_method(D_METHOD("get_axis", "name"), &XRController3D::get_axis);
+	ClassDB::bind_method(D_METHOD("get_input", "name"), &XRController3D::get_input);
+	ClassDB::bind_method(D_METHOD("get_float", "name"), &XRController3D::get_float);
+	ClassDB::bind_method(D_METHOD("get_vector2", "name"), &XRController3D::get_vector2);
 
 	ClassDB::bind_method(D_METHOD("get_tracker_hand"), &XRController3D::get_tracker_hand);
 
 	ADD_SIGNAL(MethodInfo("button_pressed", PropertyInfo(Variant::STRING, "name")));
 	ADD_SIGNAL(MethodInfo("button_released", PropertyInfo(Variant::STRING, "name")));
-	ADD_SIGNAL(MethodInfo("input_value_changed", PropertyInfo(Variant::STRING, "name"), PropertyInfo(Variant::FLOAT, "value")));
-	ADD_SIGNAL(MethodInfo("input_axis_changed", PropertyInfo(Variant::STRING, "name"), PropertyInfo(Variant::VECTOR2, "value")));
-};
+	ADD_SIGNAL(MethodInfo("input_float_changed", PropertyInfo(Variant::STRING, "name"), PropertyInfo(Variant::FLOAT, "value")));
+	ADD_SIGNAL(MethodInfo("input_vector2_changed", PropertyInfo(Variant::STRING, "name"), PropertyInfo(Variant::VECTOR2, "value")));
+	ADD_SIGNAL(MethodInfo("profile_changed", PropertyInfo(Variant::STRING, "role")));
+}
 
 void XRController3D::_bind_tracker() {
 	XRNode3D::_bind_tracker();
@@ -458,8 +507,9 @@ void XRController3D::_bind_tracker() {
 		// bind to input signals
 		tracker->connect("button_pressed", callable_mp(this, &XRController3D::_button_pressed));
 		tracker->connect("button_released", callable_mp(this, &XRController3D::_button_released));
-		tracker->connect("input_value_changed", callable_mp(this, &XRController3D::_input_value_changed));
-		tracker->connect("input_axis_changed", callable_mp(this, &XRController3D::_input_axis_changed));
+		tracker->connect("input_float_changed", callable_mp(this, &XRController3D::_input_float_changed));
+		tracker->connect("input_vector2_changed", callable_mp(this, &XRController3D::_input_vector2_changed));
+		tracker->connect("profile_changed", callable_mp(this, &XRController3D::_profile_changed));
 	}
 }
 
@@ -468,31 +518,32 @@ void XRController3D::_unbind_tracker() {
 		// unbind input signals
 		tracker->disconnect("button_pressed", callable_mp(this, &XRController3D::_button_pressed));
 		tracker->disconnect("button_released", callable_mp(this, &XRController3D::_button_released));
-		tracker->disconnect("input_value_changed", callable_mp(this, &XRController3D::_input_value_changed));
-		tracker->disconnect("input_axis_changed", callable_mp(this, &XRController3D::_input_axis_changed));
+		tracker->disconnect("input_float_changed", callable_mp(this, &XRController3D::_input_float_changed));
+		tracker->disconnect("input_vector2_changed", callable_mp(this, &XRController3D::_input_vector2_changed));
+		tracker->disconnect("profile_changed", callable_mp(this, &XRController3D::_profile_changed));
 	}
 
 	XRNode3D::_unbind_tracker();
 }
 
 void XRController3D::_button_pressed(const String &p_name) {
-	// just pass it on...
 	emit_signal(SNAME("button_pressed"), p_name);
 }
 
 void XRController3D::_button_released(const String &p_name) {
-	// just pass it on...
 	emit_signal(SNAME("button_released"), p_name);
 }
 
-void XRController3D::_input_value_changed(const String &p_name, float p_value) {
-	// just pass it on...
-	emit_signal(SNAME("input_value_changed"), p_name, p_value);
+void XRController3D::_input_float_changed(const String &p_name, float p_value) {
+	emit_signal(SNAME("input_float_changed"), p_name, p_value);
 }
 
-void XRController3D::_input_axis_changed(const String &p_name, Vector2 p_value) {
-	// just pass it on...
-	emit_signal(SNAME("input_axis_changed"), p_name, p_value);
+void XRController3D::_input_vector2_changed(const String &p_name, Vector2 p_value) {
+	emit_signal(SNAME("input_vector2_changed"), p_name, p_value);
+}
+
+void XRController3D::_profile_changed(const String &p_role) {
+	emit_signal(SNAME("profile_changed"), p_role);
 }
 
 bool XRController3D::is_button_pressed(const StringName &p_name) const {
@@ -505,7 +556,15 @@ bool XRController3D::is_button_pressed(const StringName &p_name) const {
 	}
 }
 
-float XRController3D::get_value(const StringName &p_name) const {
+Variant XRController3D::get_input(const StringName &p_name) const {
+	if (tracker.is_valid()) {
+		return tracker->get_input(p_name);
+	} else {
+		return Variant();
+	}
+}
+
+float XRController3D::get_float(const StringName &p_name) const {
 	if (tracker.is_valid()) {
 		// Inputs should already be of the correct type, our XR runtime handles conversions between raw input and the desired type, but just in case we convert
 		Variant input = tracker->get_input(p_name);
@@ -526,7 +585,7 @@ float XRController3D::get_value(const StringName &p_name) const {
 	}
 }
 
-Vector2 XRController3D::get_axis(const StringName &p_name) const {
+Vector2 XRController3D::get_vector2(const StringName &p_name) const {
 	if (tracker.is_valid()) {
 		// Inputs should already be of the correct type, our XR runtime handles conversions between raw input and the desired type, but just in case we convert
 		Variant input = tracker->get_input(p_name);
@@ -553,7 +612,7 @@ Vector2 XRController3D::get_axis(const StringName &p_name) const {
 
 XRPositionalTracker::TrackerHand XRController3D::get_tracker_hand() const {
 	// get our XRServer
-	if (!tracker.is_valid()) {
+	if (tracker.is_null()) {
 		return XRPositionalTracker::TRACKER_HAND_UNKNOWN;
 	}
 
@@ -582,18 +641,29 @@ Plane XRAnchor3D::get_plane() const {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+Vector<XROrigin3D *> XROrigin3D::origin_nodes;
+
 PackedStringArray XROrigin3D::get_configuration_warnings() const {
-	PackedStringArray warnings = Node::get_configuration_warnings();
+	PackedStringArray warnings = Node3D::get_configuration_warnings();
 
 	if (is_visible() && is_inside_tree()) {
-		if (tracked_camera == nullptr) {
+		bool has_camera = false;
+		for (int i = 0; !has_camera && i < get_child_count(); i++) {
+			XRCamera3D *camera = Object::cast_to<XRCamera3D>(get_child(i));
+			if (camera) {
+				// found it!
+				has_camera = true;
+			}
+		}
+
+		if (!has_camera) {
 			warnings.push_back(RTR("XROrigin3D requires an XRCamera3D child node."));
 		}
 	}
 
 	bool xr_enabled = GLOBAL_GET("xr/shaders/enabled");
 	if (!xr_enabled) {
-		warnings.push_back(RTR("XR is not enabled in rendering project settings. Stereoscopic output is not supported unless this is enabled."));
+		warnings.push_back(RTR("XR shaders are not enabled in project settings. Stereoscopic output is not supported unless they are enabled. Please enable `xr/shaders/enabled` to use stereoscopic output."));
 	}
 
 	return warnings;
@@ -603,14 +673,10 @@ void XROrigin3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_world_scale", "world_scale"), &XROrigin3D::set_world_scale);
 	ClassDB::bind_method(D_METHOD("get_world_scale"), &XROrigin3D::get_world_scale);
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "world_scale"), "set_world_scale", "get_world_scale");
-}
 
-void XROrigin3D::set_tracked_camera(XRCamera3D *p_tracked_camera) {
-	tracked_camera = p_tracked_camera;
-}
-
-XRCamera3D *XROrigin3D::get_tracked_camera() const {
-	return tracked_camera;
+	ClassDB::bind_method(D_METHOD("set_current", "enabled"), &XROrigin3D::set_current);
+	ClassDB::bind_method(D_METHOD("is_current"), &XROrigin3D::is_current);
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "current"), "set_current", "is_current");
 }
 
 real_t XROrigin3D::get_world_scale() const {
@@ -629,6 +695,60 @@ void XROrigin3D::set_world_scale(real_t p_world_scale) {
 	xr_server->set_world_scale(p_world_scale);
 }
 
+void XROrigin3D::_set_current(bool p_enabled, bool p_update_others) {
+	// We run this logic even if current already equals p_enabled as we may have set this previously before we entered our tree.
+	// This is then called a second time on NOTIFICATION_ENTER_TREE where we actually process activating this origin node.
+	current = p_enabled;
+
+	if (!is_inside_tree() || Engine::get_singleton()->is_editor_hint()) {
+		return;
+	}
+
+	// Notify us of any transform changes
+	set_notify_local_transform(current);
+	set_notify_transform(current);
+
+	// update XRServer with our current position
+	if (current) {
+		XRServer *xr_server = XRServer::get_singleton();
+		ERR_FAIL_NULL(xr_server);
+
+		xr_server->set_world_origin(get_global_transform());
+	}
+
+	// Check if we need to update our other origin nodes accordingly
+	if (p_update_others) {
+		if (current) {
+			for (int i = 0; i < origin_nodes.size(); i++) {
+				if (origin_nodes[i] != this && origin_nodes[i]->current) {
+					origin_nodes[i]->_set_current(false, false);
+				}
+			}
+		} else {
+			// We no longer have a current origin so find the first one we can make current
+			for (int i = 0; i < origin_nodes.size(); i++) {
+				if (origin_nodes[i] != this) {
+					origin_nodes[i]->_set_current(true, false);
+					return; // we are done.
+				}
+			}
+		}
+	}
+}
+
+void XROrigin3D::set_current(bool p_enabled) {
+	_set_current(p_enabled, true);
+}
+
+bool XROrigin3D::is_current() const {
+	if (Engine::get_singleton()->is_editor_hint()) {
+		// return as is
+		return current;
+	} else {
+		return current && is_inside_tree();
+	}
+}
+
 void XROrigin3D::_notification(int p_what) {
 	// get our XRServer
 	XRServer *xr_server = XRServer::get_singleton();
@@ -636,34 +756,47 @@ void XROrigin3D::_notification(int p_what) {
 
 	switch (p_what) {
 		case NOTIFICATION_ENTER_TREE: {
-			set_process_internal(true);
+			if (!Engine::get_singleton()->is_editor_hint()) {
+				if (origin_nodes.is_empty()) {
+					// first entry always becomes current
+					current = true;
+				}
+
+				origin_nodes.push_back(this);
+
+				if (current) {
+					// set this again so we do whatever setup is needed.
+					set_current(true);
+				}
+			}
 		} break;
 
 		case NOTIFICATION_EXIT_TREE: {
-			set_process_internal(false);
+			if (!Engine::get_singleton()->is_editor_hint()) {
+				origin_nodes.erase(this);
+
+				if (current) {
+					// We are no longer current
+					set_current(false);
+				}
+			}
 		} break;
 
-		case NOTIFICATION_INTERNAL_PROCESS: {
-			// set our world origin to our node transform
-			xr_server->set_world_origin(get_global_transform());
-
-			// check if we have a primary interface
-			Ref<XRInterface> xr_interface = xr_server->get_primary_interface();
-			if (xr_interface.is_valid() && tracked_camera != nullptr) {
-				// get our positioning transform for our headset
-				Transform3D t = xr_interface->get_camera_transform();
-
-				// now apply this to our camera
-				tracked_camera->set_transform(t);
+		case NOTIFICATION_LOCAL_TRANSFORM_CHANGED:
+		case NOTIFICATION_TRANSFORM_CHANGED: {
+			if (current && !Engine::get_singleton()->is_editor_hint()) {
+				xr_server->set_world_origin(get_global_transform());
 			}
 		} break;
 	}
 
-	// send our notification to all active XE interfaces, they may need to react to it also
-	for (int i = 0; i < xr_server->get_interface_count(); i++) {
-		Ref<XRInterface> interface = xr_server->get_interface(i);
-		if (interface.is_valid() && interface->is_initialized()) {
-			interface->notification(p_what);
+	if (current) {
+		// send our notification to all active XE interfaces, they may need to react to it also
+		for (int i = 0; i < xr_server->get_interface_count(); i++) {
+			Ref<XRInterface> interface = xr_server->get_interface(i);
+			if (interface.is_valid() && interface->is_initialized()) {
+				interface->notification(p_what);
+			}
 		}
 	}
 }

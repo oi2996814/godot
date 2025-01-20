@@ -1,50 +1,48 @@
-/*************************************************************************/
-/*  bone_map_editor_plugin.h                                             */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  bone_map_editor_plugin.h                                              */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #ifndef BONE_MAP_EDITOR_PLUGIN_H
 #define BONE_MAP_EDITOR_PLUGIN_H
 
 #include "editor/editor_node.h"
-#include "editor/editor_plugin.h"
 #include "editor/editor_properties.h"
-
-#include "modules/modules_enabled.gen.h" // For regex.
-#ifdef MODULE_REGEX_ENABLED
-#include "modules/regex/regex.h"
-#endif
+#include "editor/plugins/editor_plugin.h"
 
 #include "scene/3d/skeleton_3d.h"
+#include "scene/gui/box_container.h"
 #include "scene/gui/color_rect.h"
 #include "scene/gui/dialogs.h"
 #include "scene/resources/bone_map.h"
 #include "scene/resources/texture.h"
+
+class AspectRatioContainer;
 
 class BoneMapperButton : public TextureButton {
 	GDCLASS(BoneMapperButton, TextureButton);
@@ -75,7 +73,7 @@ public:
 
 	bool is_require() const;
 
-	BoneMapperButton(const StringName p_profile_bone_name, bool p_require, bool p_selected);
+	BoneMapperButton(const StringName &p_profile_bone_name, bool p_require, bool p_selected);
 	~BoneMapperButton();
 };
 
@@ -96,7 +94,7 @@ class BoneMapperItem : public VBoxContainer {
 protected:
 	void _notification(int p_what);
 	static void _bind_methods();
-	virtual void _value_changed(const String &p_property, Variant p_value, const String &p_name, bool p_changing);
+	virtual void _value_changed(const String &p_property, const Variant &p_value, const String &p_name, bool p_changing);
 	virtual void create_editor();
 
 public:
@@ -119,8 +117,6 @@ public:
 
 protected:
 	void _notification(int p_what);
-	static void _bind_methods();
-
 	void _confirm();
 
 private:
@@ -169,24 +165,23 @@ class BoneMapper : public VBoxContainer {
 	void _apply_picker_selection();
 	void _clear_mapping_current_group();
 
-#ifdef MODULE_REGEX_ENABLED
 	/* For auto mapping */
 	enum BoneSegregation {
 		BONE_SEGREGATION_NONE,
 		BONE_SEGREGATION_LEFT,
 		BONE_SEGREGATION_RIGHT
 	};
-	int search_bone_by_name(Skeleton3D *p_skeleton, Vector<String> p_picklist, BoneSegregation p_segregation = BONE_SEGREGATION_NONE, int p_parent = -1, int p_child = -1, int p_children_count = -1);
-	BoneSegregation guess_bone_segregation(String p_bone_name);
+	bool is_match_with_bone_name(const String &p_bone_name, const String &p_word);
+	int search_bone_by_name(Skeleton3D *p_skeleton, const Vector<String> &p_picklist, BoneSegregation p_segregation = BONE_SEGREGATION_NONE, int p_parent = -1, int p_child = -1, int p_children_count = -1);
+	BoneSegregation guess_bone_segregation(const String &p_bone_name);
 	void auto_mapping_process(Ref<BoneMap> &p_bone_map);
 	void _run_auto_mapping();
-#endif // MODULE_REGEX_ENABLED
 
 protected:
 	void _notification(int p_what);
 	static void _bind_methods();
-	virtual void _value_changed(const String &p_property, Variant p_value, const String &p_name, bool p_changing);
-	virtual void _profile_changed(const String &p_property, Variant p_value, const String &p_name, bool p_changing);
+	virtual void _value_changed(const String &p_property, const Variant &p_value, const String &p_name, bool p_changing);
+	virtual void _profile_changed(const String &p_property, const Variant &p_value, const String &p_name, bool p_changing);
 
 public:
 	void set_current_group_idx(int p_group_idx);
@@ -206,7 +201,6 @@ class BoneMapEditor : public VBoxContainer {
 	BoneMapper *bone_mapper = nullptr;
 
 	void fetch_objects();
-	void clear_editors();
 	void create_editors();
 
 protected:
@@ -230,7 +224,7 @@ class BoneMapEditorPlugin : public EditorPlugin {
 	GDCLASS(BoneMapEditorPlugin, EditorPlugin);
 
 public:
-	virtual String get_name() const override { return "BoneMap"; }
+	virtual String get_plugin_name() const override { return "BoneMap"; }
 	BoneMapEditorPlugin();
 };
 

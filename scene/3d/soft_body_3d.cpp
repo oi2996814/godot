@@ -1,36 +1,37 @@
-/*************************************************************************/
-/*  soft_body_3d.cpp                                                     */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  soft_body_3d.cpp                                                      */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #include "soft_body_3d.h"
+#include "soft_body_3d.compat.inc"
 
-#include "scene/3d/physics_body_3d.h"
+#include "scene/3d/physics/physics_body_3d.h"
 
 SoftBodyRenderingServerHandler::SoftBodyRenderingServerHandler() {}
 
@@ -46,12 +47,14 @@ void SoftBodyRenderingServerHandler::prepare(RID p_mesh, int p_surface) {
 
 	uint32_t surface_offsets[RS::ARRAY_MAX];
 	uint32_t vertex_stride;
+	uint32_t normal_tangent_stride;
 	uint32_t attrib_stride;
 	uint32_t skin_stride;
-	RS::get_singleton()->mesh_surface_make_offsets_from_format(surface_data.format, surface_data.vertex_count, surface_data.index_count, surface_offsets, vertex_stride, attrib_stride, skin_stride);
+	RS::get_singleton()->mesh_surface_make_offsets_from_format(surface_data.format, surface_data.vertex_count, surface_data.index_count, surface_offsets, vertex_stride, normal_tangent_stride, attrib_stride, skin_stride);
 
 	buffer = surface_data.vertex_data;
 	stride = vertex_stride;
+	normal_stride = normal_tangent_stride;
 	offset_vertices = surface_offsets[RS::ARRAY_VERTEX];
 	offset_normal = surface_offsets[RS::ARRAY_NORMAL];
 }
@@ -59,6 +62,7 @@ void SoftBodyRenderingServerHandler::prepare(RID p_mesh, int p_surface) {
 void SoftBodyRenderingServerHandler::clear() {
 	buffer.resize(0);
 	stride = 0;
+	normal_stride = 0;
 	offset_vertices = 0;
 	offset_normal = 0;
 
@@ -78,21 +82,19 @@ void SoftBodyRenderingServerHandler::commit_changes() {
 	RS::get_singleton()->mesh_surface_update_vertex_region(mesh, surface, 0, buffer);
 }
 
-void SoftBodyRenderingServerHandler::set_vertex(int p_vertex_id, const void *p_vector3) {
-	memcpy(&write_buffer[p_vertex_id * stride + offset_vertices], p_vector3, sizeof(float) * 3);
+void SoftBodyRenderingServerHandler::set_vertex(int p_vertex_id, const Vector3 &p_vertex) {
+	float *vertex_buffer = reinterpret_cast<float *>(write_buffer + p_vertex_id * stride + offset_vertices);
+	*vertex_buffer++ = (float)p_vertex.x;
+	*vertex_buffer++ = (float)p_vertex.y;
+	*vertex_buffer++ = (float)p_vertex.z;
 }
 
-void SoftBodyRenderingServerHandler::set_normal(int p_vertex_id, const void *p_vector3) {
-	// Store normal vector in A2B10G10R10 format.
-	Vector3 n;
-	memcpy(&n, p_vector3, sizeof(Vector3));
-	n *= Vector3(0.5, 0.5, 0.5);
-	n += Vector3(0.5, 0.5, 0.5);
-	Vector2 res = n.octahedron_encode();
+void SoftBodyRenderingServerHandler::set_normal(int p_vertex_id, const Vector3 &p_normal) {
+	Vector2 res = p_normal.octahedron_encode();
 	uint32_t value = 0;
 	value |= (uint16_t)CLAMP(res.x * 65535, 0, 65535);
 	value |= (uint16_t)CLAMP(res.y * 65535, 0, 65535) << 16;
-	memcpy(&write_buffer[p_vertex_id * stride + offset_normal], &value, sizeof(uint32_t));
+	memcpy(&write_buffer[p_vertex_id * normal_stride + offset_normal], &value, sizeof(uint32_t));
 }
 
 void SoftBodyRenderingServerHandler::set_aabb(const AABB &p_aabb) {
@@ -199,12 +201,18 @@ bool SoftBody3D::_set_property_pinned_points_indices(const Array &p_indices) {
 	int point_index;
 	for (int i = 0; i < p_indices_size; ++i) {
 		point_index = p_indices.get(i);
-		if (w[i].point_index != point_index) {
-			if (-1 != w[i].point_index) {
+		if (w[i].point_index != point_index || pinned_points.size() < p_indices_size) {
+			bool insert = false;
+			if (w[i].point_index != -1 && p_indices.find(w[i].point_index) == -1) {
 				pin_point(w[i].point_index, false);
+				insert = true;
 			}
 			w[i].point_index = point_index;
-			pin_point(w[i].point_index, true);
+			if (insert) {
+				pin_point(w[i].point_index, true, NodePath(), i);
+			} else {
+				pin_point(w[i].point_index, true);
+			}
 		}
 	}
 	return true;
@@ -217,8 +225,13 @@ bool SoftBody3D::_set_property_pinned_points_attachment(int p_item, const String
 
 	if ("spatial_attachment_path" == p_what) {
 		PinnedPoint *w = pinned_points.ptrw();
-		pin_point(w[p_item].point_index, true, p_value);
-		_make_cache_dirty();
+
+		if (is_inside_tree()) {
+			callable_mp(this, &SoftBody3D::_pin_point_deferred).call_deferred(Variant(w[p_item].point_index), true, p_value);
+		} else {
+			pin_point(w[p_item].point_index, true, p_value);
+			_make_cache_dirty();
+		}
 	} else if ("offset" == p_what) {
 		PinnedPoint *w = pinned_points.ptrw();
 		w[p_item].offset = p_value;
@@ -302,14 +315,6 @@ void SoftBody3D::_notification(int p_what) {
 				_prepare_physics_server();
 			}
 		} break;
-
-#ifdef TOOLS_ENABLED
-		case NOTIFICATION_LOCAL_TRANSFORM_CHANGED: {
-			if (Engine::get_singleton()->is_editor_hint()) {
-				update_configuration_warnings();
-			}
-		} break;
-#endif
 	}
 }
 
@@ -358,7 +363,7 @@ void SoftBody3D::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("get_point_transform", "point_index"), &SoftBody3D::get_point_transform);
 
-	ClassDB::bind_method(D_METHOD("set_point_pinned", "point_index", "pinned", "attachment_path"), &SoftBody3D::pin_point, DEFVAL(NodePath()));
+	ClassDB::bind_method(D_METHOD("set_point_pinned", "point_index", "pinned", "attachment_path", "insert_at"), &SoftBody3D::pin_point, DEFVAL(NodePath()), DEFVAL(-1));
 	ClassDB::bind_method(D_METHOD("is_point_pinned", "point_index"), &SoftBody3D::is_point_pinned);
 
 	ClassDB::bind_method(D_METHOD("set_ray_pickable", "ray_pickable"), &SoftBody3D::set_ray_pickable);
@@ -368,7 +373,7 @@ void SoftBody3D::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "collision_layer", PROPERTY_HINT_LAYERS_3D_PHYSICS), "set_collision_layer", "get_collision_layer");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "collision_mask", PROPERTY_HINT_LAYERS_3D_PHYSICS), "set_collision_mask", "get_collision_mask");
 
-	ADD_PROPERTY(PropertyInfo(Variant::NODE_PATH, "parent_collision_ignore", PROPERTY_HINT_PROPERTY_OF_VARIANT_TYPE, "Parent collision object"), "set_parent_collision_ignore", "get_parent_collision_ignore");
+	ADD_PROPERTY(PropertyInfo(Variant::NODE_PATH, "parent_collision_ignore", PROPERTY_HINT_NODE_PATH_VALID_TYPES, "CollisionObject3D"), "set_parent_collision_ignore", "get_parent_collision_ignore");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "simulation_precision", PROPERTY_HINT_RANGE, "1,100,1"), "set_simulation_precision", "get_simulation_precision");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "total_mass", PROPERTY_HINT_RANGE, "0.01,10000,1"), "set_total_mass", "get_total_mass");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "linear_stiffness", PROPERTY_HINT_RANGE, "0,1,0.01"), "set_linear_stiffness", "get_linear_stiffness");
@@ -385,15 +390,10 @@ void SoftBody3D::_bind_methods() {
 }
 
 PackedStringArray SoftBody3D::get_configuration_warnings() const {
-	PackedStringArray warnings = Node::get_configuration_warnings();
+	PackedStringArray warnings = MeshInstance3D::get_configuration_warnings();
 
 	if (mesh.is_null()) {
 		warnings.push_back(RTR("This body will be ignored until you set a mesh."));
-	}
-
-	Transform3D t = get_transform();
-	if ((ABS(t.basis.get_column(0).length() - 1.0) > 0.05 || ABS(t.basis.get_column(1).length() - 1.0) > 0.05 || ABS(t.basis.get_column(2).length() - 1.0) > 0.05)) {
-		warnings.push_back(RTR("Size changes to SoftBody3D will be overridden by the physics engine when running.\nChange the size in children collision shapes instead."));
 	}
 
 	return warnings;
@@ -432,8 +432,8 @@ void SoftBody3D::_draw_soft_mesh() {
 
 		/// Necessary in order to render the mesh correctly (Soft body nodes are in global space)
 		simulation_started = true;
-		call_deferred(SNAME("set_as_top_level"), true);
-		call_deferred(SNAME("set_transform"), Transform3D());
+		callable_mp((Node3D *)this, &Node3D::set_as_top_level).call_deferred(true);
+		callable_mp((Node3D *)this, &Node3D::set_transform).call_deferred(Transform3D());
 	}
 
 	_update_physics_server();
@@ -487,6 +487,7 @@ void SoftBody3D::_become_mesh_owner() {
 	uint32_t surface_format = mesh->surface_get_format(0);
 
 	surface_format |= Mesh::ARRAY_FLAG_USE_DYNAMIC_UPDATE;
+	surface_format &= ~Mesh::ARRAY_FLAG_COMPRESS_ATTRIBUTES;
 
 	Ref<ArrayMesh> soft_mesh;
 	soft_mesh.instantiate();
@@ -523,13 +524,13 @@ uint32_t SoftBody3D::get_collision_layer() const {
 void SoftBody3D::set_collision_layer_value(int p_layer_number, bool p_value) {
 	ERR_FAIL_COND_MSG(p_layer_number < 1, "Collision layer number must be between 1 and 32 inclusive.");
 	ERR_FAIL_COND_MSG(p_layer_number > 32, "Collision layer number must be between 1 and 32 inclusive.");
-	uint32_t collision_layer = get_collision_layer();
+	uint32_t collision_layer_new = get_collision_layer();
 	if (p_value) {
-		collision_layer |= 1 << (p_layer_number - 1);
+		collision_layer_new |= 1 << (p_layer_number - 1);
 	} else {
-		collision_layer &= ~(1 << (p_layer_number - 1));
+		collision_layer_new &= ~(1 << (p_layer_number - 1));
 	}
-	set_collision_layer(collision_layer);
+	set_collision_layer(collision_layer_new);
 }
 
 bool SoftBody3D::get_collision_layer_value(int p_layer_number) const {
@@ -607,14 +608,14 @@ TypedArray<PhysicsBody3D> SoftBody3D::get_collision_exceptions() {
 void SoftBody3D::add_collision_exception_with(Node *p_node) {
 	ERR_FAIL_NULL(p_node);
 	CollisionObject3D *collision_object = Object::cast_to<CollisionObject3D>(p_node);
-	ERR_FAIL_COND_MSG(!collision_object, "Collision exception only works between two CollisionObject3Ds.");
+	ERR_FAIL_NULL_MSG(collision_object, "Collision exception only works between two nodes that inherit from CollisionObject3D (such as Area3D or PhysicsBody3D).");
 	PhysicsServer3D::get_singleton()->soft_body_add_collision_exception(physics_rid, collision_object->get_rid());
 }
 
 void SoftBody3D::remove_collision_exception_with(Node *p_node) {
 	ERR_FAIL_NULL(p_node);
 	CollisionObject3D *collision_object = Object::cast_to<CollisionObject3D>(p_node);
-	ERR_FAIL_COND_MSG(!collision_object, "Collision exception only works between two CollisionObject3Ds.");
+	ERR_FAIL_NULL_MSG(collision_object, "Collision exception only works between two nodes that inherit from CollisionObject3D (such as Area3D or PhysicsBody3D).");
 	PhysicsServer3D::get_singleton()->soft_body_remove_collision_exception(physics_rid, collision_object->get_rid());
 }
 
@@ -674,13 +675,19 @@ void SoftBody3D::pin_point_toggle(int p_point_index) {
 	pin_point(p_point_index, !(-1 != _has_pinned_point(p_point_index)));
 }
 
-void SoftBody3D::pin_point(int p_point_index, bool pin, const NodePath &p_spatial_attachment_path) {
+void SoftBody3D::pin_point(int p_point_index, bool pin, const NodePath &p_spatial_attachment_path, int p_insert_at) {
+	ERR_FAIL_COND_MSG(p_insert_at < -1 || p_insert_at >= pinned_points.size(), "Invalid index for pin point insertion position.");
 	_pin_point_on_physics_server(p_point_index, pin);
 	if (pin) {
-		_add_pinned_point(p_point_index, p_spatial_attachment_path);
+		_add_pinned_point(p_point_index, p_spatial_attachment_path, p_insert_at);
 	} else {
 		_remove_pinned_point(p_point_index);
 	}
+}
+
+void SoftBody3D::_pin_point_deferred(int p_point_index, bool pin, const NodePath p_spatial_attachment_path) {
+	pin_point(p_point_index, pin, p_spatial_attachment_path);
+	_make_cache_dirty();
 }
 
 bool SoftBody3D::is_point_pinned(int p_point_index) const {
@@ -704,6 +711,7 @@ SoftBody3D::SoftBody3D() :
 
 SoftBody3D::~SoftBody3D() {
 	memdelete(rendering_server_handler);
+	ERR_FAIL_NULL(PhysicsServer3D::get_singleton());
 	PhysicsServer3D::get_singleton()->free(physics_rid);
 }
 
@@ -723,9 +731,6 @@ void SoftBody3D::_update_cache_pin_points_datas() {
 		if (!w[i].spatial_attachment_path.is_empty()) {
 			w[i].spatial_attachment = Object::cast_to<Node3D>(get_node(w[i].spatial_attachment_path));
 		}
-		if (!w[i].spatial_attachment) {
-			ERR_PRINT("Node3D node not defined in the pinned point, this is undefined behavior for SoftBody3D!");
-		}
 	}
 }
 
@@ -733,7 +738,7 @@ void SoftBody3D::_pin_point_on_physics_server(int p_point_index, bool pin) {
 	PhysicsServer3D::get_singleton()->soft_body_pin_point(physics_rid, p_point_index, pin);
 }
 
-void SoftBody3D::_add_pinned_point(int p_point_index, const NodePath &p_spatial_attachment_path) {
+void SoftBody3D::_add_pinned_point(int p_point_index, const NodePath &p_spatial_attachment_path, int p_insert_at) {
 	SoftBody3D::PinnedPoint *pinned_point;
 	if (-1 == _get_pinned_point(p_point_index, pinned_point)) {
 		// Create new
@@ -746,14 +751,22 @@ void SoftBody3D::_add_pinned_point(int p_point_index, const NodePath &p_spatial_
 			pp.offset = (pp.spatial_attachment->get_global_transform().affine_inverse() * get_global_transform()).xform(PhysicsServer3D::get_singleton()->soft_body_get_point_global_position(physics_rid, pp.point_index));
 		}
 
-		pinned_points.push_back(pp);
+		if (p_insert_at != -1) {
+			pinned_points.insert(p_insert_at, pp);
+		} else {
+			pinned_points.push_back(pp);
+		}
 
 	} else {
 		pinned_point->point_index = p_point_index;
 		pinned_point->spatial_attachment_path = p_spatial_attachment_path;
 
 		if (!p_spatial_attachment_path.is_empty() && has_node(p_spatial_attachment_path)) {
-			pinned_point->spatial_attachment = Object::cast_to<Node3D>(get_node(p_spatial_attachment_path));
+			Node3D *attachment_node = Object::cast_to<Node3D>(get_node(p_spatial_attachment_path));
+
+			ERR_FAIL_NULL_MSG(attachment_node, "Attachment node path is invalid.");
+
+			pinned_point->spatial_attachment = attachment_node;
 			pinned_point->offset = (pinned_point->spatial_attachment->get_global_transform().affine_inverse() * get_global_transform()).xform(PhysicsServer3D::get_singleton()->soft_body_get_point_global_position(physics_rid, pinned_point->point_index));
 		}
 	}

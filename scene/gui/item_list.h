@@ -1,38 +1,39 @@
-/*************************************************************************/
-/*  item_list.h                                                          */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  item_list.h                                                           */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #ifndef ITEM_LIST_H
 #define ITEM_LIST_H
 
 #include "scene/gui/control.h"
 #include "scene/gui/scroll_bar.h"
+#include "scene/property_list_helper.h"
 #include "scene/resources/text_paragraph.h"
 
 class ItemList : public Control {
@@ -46,7 +47,8 @@ public:
 
 	enum SelectMode {
 		SELECT_SINGLE,
-		SELECT_MULTI
+		SELECT_MULTI,
+		SELECT_TOGGLE,
 	};
 
 private:
@@ -57,9 +59,11 @@ private:
 		Color icon_modulate = Color(1, 1, 1, 1);
 		Ref<Texture2D> tag_icon;
 		String text;
+		String xl_text;
 		Ref<TextParagraph> text_buf;
 		String language;
 		TextDirection text_direction = TEXT_DIRECTION_AUTO;
+		AutoTranslateMode auto_translate_mode = AUTO_TRANSLATE_MODE_INHERIT;
 
 		bool selectable = true;
 		bool selected = false;
@@ -70,6 +74,7 @@ private:
 		Color custom_fg;
 		Color custom_bg = Color(0.0, 0.0, 0.0, 0.0);
 
+		int column = 0;
 		Rect2 rect_cache;
 		Rect2 min_rect_cache;
 
@@ -80,24 +85,37 @@ private:
 		Item() {
 			text_buf.instantiate();
 		}
+
+		Item(bool p_dummy) {}
 	};
 
+	static inline PropertyListHelper base_property_helper;
+	PropertyListHelper property_helper;
+
 	int current = -1;
+	int hovered = -1;
 
 	bool shape_changed = true;
 
 	bool ensure_selected_visible = false;
 	bool same_column_width = false;
+	bool allow_search = true;
+
+	bool auto_width = false;
+	float auto_width_value = 0.0;
 
 	bool auto_height = false;
 	float auto_height_value = 0.0;
+
+	bool wraparound_items = true;
 
 	Vector<Item> items;
 	Vector<int> separators;
 
 	SelectMode select_mode = SELECT_SINGLE;
 	IconMode icon_mode = ICON_MODE_LEFT;
-	VScrollBar *scroll_bar = nullptr;
+	VScrollBar *scroll_bar_v = nullptr;
+	HScrollBar *scroll_bar_h = nullptr;
 	TextServer::OverrunBehavior text_overrun_behavior = TextServer::OVERRUN_TRIM_ELLIPSIS;
 
 	uint64_t search_time_msec = 0;
@@ -110,6 +128,7 @@ private:
 
 	Size2 fixed_icon_size;
 	Size2 max_item_size_cache;
+	Size2 fixed_tag_icon_size;
 
 	int defer_select_single = -1;
 	bool allow_rmb_select = false;
@@ -129,12 +148,17 @@ private:
 		Ref<Font> font;
 		int font_size = 0;
 		Color font_color;
+		Color font_hovered_color;
+		Color font_hovered_selected_color;
 		Color font_selected_color;
 		int font_outline_size = 0;
 		Color font_outline_color;
 
 		int line_separation = 0;
 		int icon_margin = 0;
+		Ref<StyleBox> hovered_style;
+		Ref<StyleBox> hovered_selected_style;
+		Ref<StyleBox> hovered_selected_focus_style;
 		Ref<StyleBox> selected_style;
 		Ref<StyleBox> selected_focus_style;
 		Ref<StyleBox> cursor_style;
@@ -143,15 +167,18 @@ private:
 	} theme_cache;
 
 	void _scroll_changed(double);
-	void _shape(int p_idx);
+	void _shape_text(int p_idx);
+	void _mouse_exited();
+
+	String _atr(int p_idx, const String &p_text) const;
 
 protected:
-	virtual void _update_theme_item_cache() override;
-
 	void _notification(int p_what);
 	bool _set(const StringName &p_name, const Variant &p_value);
-	bool _get(const StringName &p_name, Variant &r_ret) const;
-	void _get_property_list(List<PropertyInfo> *p_list) const;
+	bool _get(const StringName &p_name, Variant &r_ret) const { return property_helper.property_get_value(p_name, r_ret); }
+	void _get_property_list(List<PropertyInfo> *p_list) const { property_helper.get_property_list(p_list); }
+	bool _property_can_revert(const StringName &p_name) const { return property_helper.property_can_revert(p_name); }
+	bool _property_get_revert(const StringName &p_name, Variant &r_property) const { return property_helper.property_get_revert(p_name, r_property); }
 	static void _bind_methods();
 
 public:
@@ -168,6 +195,9 @@ public:
 
 	void set_item_language(int p_idx, const String &p_language);
 	String get_item_language(int p_idx) const;
+
+	void set_item_auto_translate_mode(int p_idx, AutoTranslateMode p_mode);
+	AutoTranslateMode get_item_auto_translate_mode(int p_idx) const;
 
 	void set_item_icon(int p_idx, const Ref<Texture2D> &p_icon);
 	Ref<Texture2D> get_item_icon(int p_idx) const;
@@ -191,7 +221,6 @@ public:
 	Variant get_item_metadata(int p_idx) const;
 
 	void set_item_tag_icon(int p_idx, const Ref<Texture2D> &p_tag_icon);
-	Ref<Texture2D> get_item_tag_icon(int p_idx) const;
 
 	void set_item_tooltip_enabled(int p_idx, const bool p_enabled);
 	bool is_item_tooltip_enabled(int p_idx) const;
@@ -204,6 +233,8 @@ public:
 
 	void set_item_custom_fg_color(int p_idx, const Color &p_custom_fg_color);
 	Color get_item_custom_fg_color(int p_idx) const;
+
+	Rect2 get_item_rect(int p_idx, bool p_expand = true) const;
 
 	void set_text_overrun_behavior(TextServer::OverrunBehavior p_behavior);
 	TextServer::OverrunBehavior get_text_overrun_behavior() const;
@@ -247,11 +278,16 @@ public:
 	void set_fixed_icon_size(const Size2i &p_size);
 	Size2i get_fixed_icon_size() const;
 
+	void set_fixed_tag_icon_size(const Size2i &p_size);
+
 	void set_allow_rmb_select(bool p_allow);
 	bool get_allow_rmb_select() const;
 
 	void set_allow_reselect(bool p_allow);
 	bool get_allow_reselect() const;
+
+	void set_allow_search(bool p_allow);
+	bool get_allow_search() const;
 
 	void ensure_current_is_visible();
 
@@ -265,14 +301,23 @@ public:
 	void set_icon_scale(real_t p_scale);
 	real_t get_icon_scale() const;
 
+	void set_auto_width(bool p_enable);
+	bool has_auto_width() const;
+
 	void set_auto_height(bool p_enable);
 	bool has_auto_height() const;
+
+	void set_wraparound_items(bool p_enable);
+	bool has_wraparound_items() const;
 
 	Size2 get_minimum_size() const override;
 
 	void set_autoscroll_to_bottom(const bool p_enable);
 
-	VScrollBar *get_v_scroll_bar() { return scroll_bar; }
+	void force_update_list_size();
+
+	VScrollBar *get_v_scroll_bar() { return scroll_bar_v; }
+	HScrollBar *get_h_scroll_bar() { return scroll_bar_h; }
 
 	ItemList();
 	~ItemList();

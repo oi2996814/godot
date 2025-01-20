@@ -1,39 +1,39 @@
-/*************************************************************************/
-/*  editor_locale_dialog.cpp                                             */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  editor_locale_dialog.cpp                                              */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #include "editor_locale_dialog.h"
 
 #include "core/config/project_settings.h"
-#include "editor/editor_node.h"
-#include "editor/editor_scale.h"
+#include "core/string/translation_server.h"
 #include "editor/editor_undo_redo_manager.h"
+#include "editor/themes/editor_scale.h"
 #include "scene/gui/check_button.h"
 #include "scene/gui/line_edit.h"
 #include "scene/gui/option_button.h"
@@ -123,7 +123,7 @@ void EditorLocaleDialog::_filter_lang_option_changed() {
 	Array f_lang_all;
 
 	if (ProjectSettings::get_singleton()->has_setting("internationalization/locale/language_filter")) {
-		f_lang_all = ProjectSettings::get_singleton()->get("internationalization/locale/language_filter");
+		f_lang_all = GLOBAL_GET("internationalization/locale/language_filter");
 		prev = f_lang_all;
 	}
 
@@ -141,6 +141,7 @@ void EditorLocaleDialog::_filter_lang_option_changed() {
 
 	f_lang_all.sort();
 
+	EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
 	undo_redo->create_action(TTR("Changed Locale Language Filter"));
 	undo_redo->add_do_property(ProjectSettings::get_singleton(), "internationalization/locale/language_filter", f_lang_all);
 	undo_redo->add_undo_property(ProjectSettings::get_singleton(), "internationalization/locale/language_filter", prev);
@@ -149,22 +150,22 @@ void EditorLocaleDialog::_filter_lang_option_changed() {
 
 void EditorLocaleDialog::_filter_script_option_changed() {
 	TreeItem *t = script_list->get_edited();
-	String script = t->get_metadata(0);
+	String scr_code = t->get_metadata(0);
 	bool checked = t->is_checked(0);
 
 	Variant prev;
 	Array f_script_all;
 
 	if (ProjectSettings::get_singleton()->has_setting("internationalization/locale/script_filter")) {
-		f_script_all = ProjectSettings::get_singleton()->get("internationalization/locale/script_filter");
+		f_script_all = GLOBAL_GET("internationalization/locale/script_filter");
 		prev = f_script_all;
 	}
 
-	int l_idx = f_script_all.find(script);
+	int l_idx = f_script_all.find(scr_code);
 
 	if (checked) {
 		if (l_idx == -1) {
-			f_script_all.append(script);
+			f_script_all.append(scr_code);
 		}
 	} else {
 		if (l_idx != -1) {
@@ -174,6 +175,7 @@ void EditorLocaleDialog::_filter_script_option_changed() {
 
 	f_script_all.sort();
 
+	EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
 	undo_redo->create_action(TTR("Changed Locale Script Filter"));
 	undo_redo->add_do_property(ProjectSettings::get_singleton(), "internationalization/locale/script_filter", f_script_all);
 	undo_redo->add_undo_property(ProjectSettings::get_singleton(), "internationalization/locale/script_filter", prev);
@@ -189,7 +191,7 @@ void EditorLocaleDialog::_filter_cnt_option_changed() {
 	Array f_cnt_all;
 
 	if (ProjectSettings::get_singleton()->has_setting("internationalization/locale/country_filter")) {
-		f_cnt_all = ProjectSettings::get_singleton()->get("internationalization/locale/country_filter");
+		f_cnt_all = GLOBAL_GET("internationalization/locale/country_filter");
 		prev = f_cnt_all;
 	}
 
@@ -207,6 +209,7 @@ void EditorLocaleDialog::_filter_cnt_option_changed() {
 
 	f_cnt_all.sort();
 
+	EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
 	undo_redo->create_action(TTR("Changed Locale Country Filter"));
 	undo_redo->add_do_property(ProjectSettings::get_singleton(), "internationalization/locale/country_filter", f_cnt_all);
 	undo_redo->add_undo_property(ProjectSettings::get_singleton(), "internationalization/locale/country_filter", prev);
@@ -218,9 +221,10 @@ void EditorLocaleDialog::_filter_mode_changed(int p_mode) {
 	Variant prev;
 
 	if (ProjectSettings::get_singleton()->has_setting("internationalization/locale/locale_filter_mode")) {
-		prev = ProjectSettings::get_singleton()->get("internationalization/locale/locale_filter_mode");
+		prev = GLOBAL_GET("internationalization/locale/locale_filter_mode");
 	}
 
+	EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
 	undo_redo->create_action(TTR("Changed Locale Filter Mode"));
 	undo_redo->add_do_property(ProjectSettings::get_singleton(), "internationalization/locale/locale_filter_mode", f_mode);
 	undo_redo->add_undo_property(ProjectSettings::get_singleton(), "internationalization/locale/locale_filter_mode", prev);
@@ -238,19 +242,19 @@ void EditorLocaleDialog::_update_tree() {
 
 	int filter = SHOW_ALL_LOCALES;
 	if (ProjectSettings::get_singleton()->has_setting("internationalization/locale/locale_filter_mode")) {
-		filter = ProjectSettings::get_singleton()->get("internationalization/locale/locale_filter_mode");
+		filter = GLOBAL_GET("internationalization/locale/locale_filter_mode");
 	}
 	Array f_lang_all;
 	if (ProjectSettings::get_singleton()->has_setting("internationalization/locale/language_filter")) {
-		f_lang_all = ProjectSettings::get_singleton()->get("internationalization/locale/language_filter");
+		f_lang_all = GLOBAL_GET("internationalization/locale/language_filter");
 	}
 	Array f_cnt_all;
 	if (ProjectSettings::get_singleton()->has_setting("internationalization/locale/country_filter")) {
-		f_cnt_all = ProjectSettings::get_singleton()->get("internationalization/locale/country_filter");
+		f_cnt_all = GLOBAL_GET("internationalization/locale/country_filter");
 	}
 	Array f_script_all;
 	if (ProjectSettings::get_singleton()->has_setting("internationalization/locale/script_filter")) {
-		f_script_all = ProjectSettings::get_singleton()->get("internationalization/locale/script_filter");
+		f_script_all = GLOBAL_GET("internationalization/locale/script_filter");
 	}
 	bool is_edit_mode = edit_filters->is_pressed();
 
@@ -291,14 +295,14 @@ void EditorLocaleDialog::_update_tree() {
 
 	if (!is_edit_mode) {
 		TreeItem *t = script_list->create_item(s_root);
-		t->set_text(0, "[Default]");
+		t->set_text(0, TTR("[Default]"));
 		t->set_metadata(0, "");
 	}
 
 	Vector<String> scripts = TranslationServer::get_singleton()->get_all_scripts();
 	for (const String &E : scripts) {
 		if (is_edit_mode || (filter == SHOW_ALL_LOCALES) || f_script_all.has(E) || f_script_all.is_empty()) {
-			const String &script = TranslationServer::get_singleton()->get_script_name(E);
+			const String &scr_code = TranslationServer::get_singleton()->get_script_name(E);
 			TreeItem *t = script_list->create_item(s_root);
 			if (is_edit_mode) {
 				t->set_cell_mode(0, TreeItem::CELL_MODE_CHECK);
@@ -307,7 +311,7 @@ void EditorLocaleDialog::_update_tree() {
 			} else if (script_code->get_text() == E) {
 				t->select(0);
 			}
-			t->set_text(0, vformat("%s [%s]", script, E));
+			t->set_text(0, vformat("%s [%s]", scr_code, E));
 			t->set_metadata(0, E);
 		}
 	}
@@ -319,7 +323,7 @@ void EditorLocaleDialog::_update_tree() {
 
 	if (!is_edit_mode) {
 		TreeItem *t = cnt_list->create_item(c_root);
-		t->set_text(0, "[Default]");
+		t->set_text(0, TTR("[Default]"));
 		t->set_metadata(0, "");
 	}
 
@@ -385,8 +389,6 @@ void EditorLocaleDialog::popup_locale_dialog() {
 }
 
 EditorLocaleDialog::EditorLocaleDialog() {
-	undo_redo = EditorNode::get_undo_redo();
-
 	set_title(TTR("Select a Locale"));
 
 	VBoxContainer *vb = memnew(VBoxContainer);
@@ -398,23 +400,23 @@ EditorLocaleDialog::EditorLocaleDialog() {
 			filter_mode->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 			filter_mode->add_item(TTR("Show Selected Locales Only"), SHOW_ONLY_SELECTED_LOCALES);
 			filter_mode->select(0);
-			filter_mode->connect("item_selected", callable_mp(this, &EditorLocaleDialog::_filter_mode_changed));
+			filter_mode->connect(SceneStringName(item_selected), callable_mp(this, &EditorLocaleDialog::_filter_mode_changed));
 			hb_filter->add_child(filter_mode);
 		}
 		{
 			edit_filters = memnew(CheckButton);
-			edit_filters->set_text("Edit Filters");
+			edit_filters->set_text(TTR("Edit Filters"));
 			edit_filters->set_toggle_mode(true);
 			edit_filters->set_pressed(false);
-			edit_filters->connect("toggled", callable_mp(this, &EditorLocaleDialog::_edit_filters));
+			edit_filters->connect(SceneStringName(toggled), callable_mp(this, &EditorLocaleDialog::_edit_filters));
 			hb_filter->add_child(edit_filters);
 		}
 		{
 			advanced = memnew(CheckButton);
-			advanced->set_text("Advanced");
+			advanced->set_text(TTR("Advanced"));
 			advanced->set_toggle_mode(true);
 			advanced->set_pressed(false);
-			advanced->connect("toggled", callable_mp(this, &EditorLocaleDialog::_toggle_advanced));
+			advanced->connect(SceneStringName(toggled), callable_mp(this, &EditorLocaleDialog::_toggle_advanced));
 			hb_filter->add_child(advanced);
 		}
 		vb->add_child(hb_filter);
@@ -432,6 +434,7 @@ EditorLocaleDialog::EditorLocaleDialog() {
 			}
 			{
 				lang_list = memnew(Tree);
+				lang_list->set_auto_translate_mode(AUTO_TRANSLATE_MODE_DISABLED);
 				lang_list->set_v_size_flags(Control::SIZE_EXPAND_FILL);
 				lang_list->connect("cell_selected", callable_mp(this, &EditorLocaleDialog::_item_selected));
 				lang_list->set_columns(1);
@@ -445,11 +448,13 @@ EditorLocaleDialog::EditorLocaleDialog() {
 			vb_script_list->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 			{
 				Label *script_lbl = memnew(Label);
-				script_lbl->set_text(TTR("Script:"));
+				// TRANSLATORS: This is the label for a list of writing systems.
+				script_lbl->set_text(TTR("Script:", "Locale"));
 				vb_script_list->add_child(script_lbl);
 			}
 			{
 				script_list = memnew(Tree);
+				script_list->set_auto_translate_mode(AUTO_TRANSLATE_MODE_DISABLED);
 				script_list->set_v_size_flags(Control::SIZE_EXPAND_FILL);
 				script_list->connect("cell_selected", callable_mp(this, &EditorLocaleDialog::_item_selected));
 				script_list->set_columns(1);
@@ -468,6 +473,7 @@ EditorLocaleDialog::EditorLocaleDialog() {
 			}
 			{
 				cnt_list = memnew(Tree);
+				cnt_list->set_auto_translate_mode(AUTO_TRANSLATE_MODE_DISABLED);
 				cnt_list->set_v_size_flags(Control::SIZE_EXPAND_FILL);
 				cnt_list->connect("cell_selected", callable_mp(this, &EditorLocaleDialog::_item_selected));
 				cnt_list->set_columns(1);
@@ -503,7 +509,8 @@ EditorLocaleDialog::EditorLocaleDialog() {
 				vb_script->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 				{
 					Label *script_lbl = memnew(Label);
-					script_lbl->set_text(TTR("Script"));
+					// TRANSLATORS: This refers to a writing system.
+					script_lbl->set_text(TTR("Script", "Locale"));
 					vb_script->add_child(script_lbl);
 				}
 				{

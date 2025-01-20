@@ -1,32 +1,32 @@
-/*************************************************************************/
-/*  variant_op.cpp                                                       */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  variant_op.cpp                                                        */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #include "variant_op.h"
 
@@ -37,7 +37,7 @@ static VariantEvaluatorFunction operator_evaluator_table[Variant::OP_MAX][Varian
 static Variant::ValidatedOperatorEvaluator validated_operator_evaluator_table[Variant::OP_MAX][Variant::VARIANT_MAX][Variant::VARIANT_MAX];
 static Variant::PTROperatorEvaluator ptr_operator_evaluator_table[Variant::OP_MAX][Variant::VARIANT_MAX][Variant::VARIANT_MAX];
 
-template <class T>
+template <typename T>
 void register_op(Variant::Operator p_op, Variant::Type p_type_a, Variant::Type p_type_b) {
 	operator_return_type_table[p_op][p_type_a][p_type_b] = T::get_return_type();
 	operator_evaluator_table[p_op][p_type_a][p_type_b] = T::evaluate;
@@ -229,6 +229,22 @@ public:
 	static Variant::Type get_return_type() { return GetTypeInfo<Vector4>::VARIANT_TYPE; }
 };
 
+#define register_string_op(m_op_type, m_op_code)                                                               \
+	if constexpr (true) {                                                                                      \
+		register_op<m_op_type<String, String>>(m_op_code, Variant::STRING, Variant::STRING);                   \
+		register_op<m_op_type<String, StringName>>(m_op_code, Variant::STRING, Variant::STRING_NAME);          \
+		register_op<m_op_type<StringName, String>>(m_op_code, Variant::STRING_NAME, Variant::STRING);          \
+		register_op<m_op_type<StringName, StringName>>(m_op_code, Variant::STRING_NAME, Variant::STRING_NAME); \
+	} else                                                                                                     \
+		((void)0)
+
+#define register_string_modulo_op(m_class, m_type)                                                                         \
+	if constexpr (true) {                                                                                                  \
+		register_op<OperatorEvaluatorStringFormat<String, m_class>>(Variant::OP_MODULE, Variant::STRING, m_type);          \
+		register_op<OperatorEvaluatorStringFormat<StringName, m_class>>(Variant::OP_MODULE, Variant::STRING_NAME, m_type); \
+	} else                                                                                                                 \
+		((void)0)
+
 void Variant::_register_variant_operators() {
 	memset(operator_return_type_table, 0, sizeof(operator_return_type_table));
 	memset(operator_evaluator_table, 0, sizeof(operator_evaluator_table));
@@ -239,9 +255,7 @@ void Variant::_register_variant_operators() {
 	register_op<OperatorEvaluatorAdd<double, int64_t, double>>(Variant::OP_ADD, Variant::INT, Variant::FLOAT);
 	register_op<OperatorEvaluatorAdd<double, double, int64_t>>(Variant::OP_ADD, Variant::FLOAT, Variant::INT);
 	register_op<OperatorEvaluatorAdd<double, double, double>>(Variant::OP_ADD, Variant::FLOAT, Variant::FLOAT);
-	register_op<OperatorEvaluatorAdd<String, String, String>>(Variant::OP_ADD, Variant::STRING, Variant::STRING);
-	register_op<OperatorEvaluatorAdd<String, char32_t, String>>(Variant::OP_ADD, Variant::INT, Variant::STRING);
-	register_op<OperatorEvaluatorAdd<String, String, char32_t>>(Variant::OP_ADD, Variant::STRING, Variant::INT);
+	register_string_op(OperatorEvaluatorStringConcat, Variant::OP_ADD);
 	register_op<OperatorEvaluatorAdd<Vector2, Vector2, Vector2>>(Variant::OP_ADD, Variant::VECTOR2, Variant::VECTOR2);
 	register_op<OperatorEvaluatorAdd<Vector2i, Vector2i, Vector2i>>(Variant::OP_ADD, Variant::VECTOR2I, Variant::VECTOR2I);
 	register_op<OperatorEvaluatorAdd<Vector3, Vector3, Vector3>>(Variant::OP_ADD, Variant::VECTOR3, Variant::VECTOR3);
@@ -260,6 +274,7 @@ void Variant::_register_variant_operators() {
 	register_op<OperatorEvaluatorAppendArray<Vector2>>(Variant::OP_ADD, Variant::PACKED_VECTOR2_ARRAY, Variant::PACKED_VECTOR2_ARRAY);
 	register_op<OperatorEvaluatorAppendArray<Vector3>>(Variant::OP_ADD, Variant::PACKED_VECTOR3_ARRAY, Variant::PACKED_VECTOR3_ARRAY);
 	register_op<OperatorEvaluatorAppendArray<Color>>(Variant::OP_ADD, Variant::PACKED_COLOR_ARRAY, Variant::PACKED_COLOR_ARRAY);
+	register_op<OperatorEvaluatorAppendArray<Vector4>>(Variant::OP_ADD, Variant::PACKED_VECTOR4_ARRAY, Variant::PACKED_VECTOR4_ARRAY);
 
 	register_op<OperatorEvaluatorSub<int64_t, int64_t, int64_t>>(Variant::OP_SUBTRACT, Variant::INT, Variant::INT);
 	register_op<OperatorEvaluatorSub<double, int64_t, double>>(Variant::OP_SUBTRACT, Variant::INT, Variant::FLOAT);
@@ -384,10 +399,6 @@ void Variant::_register_variant_operators() {
 	register_op<OperatorEvaluatorDivNZ<Vector2, Vector2i, double>>(Variant::OP_DIVIDE, Variant::VECTOR2I, Variant::FLOAT);
 	register_op<OperatorEvaluatorDivNZ<Vector2i, Vector2i, int64_t>>(Variant::OP_DIVIDE, Variant::VECTOR2I, Variant::INT);
 
-	register_op<OperatorEvaluatorDiv<Vector2, Vector2, Vector2>>(Variant::OP_DIVIDE, Variant::VECTOR2, Variant::VECTOR2);
-	register_op<OperatorEvaluatorDiv<Vector2, Vector2, double>>(Variant::OP_DIVIDE, Variant::VECTOR2, Variant::FLOAT);
-	register_op<OperatorEvaluatorDiv<Vector2, Vector2, int64_t>>(Variant::OP_DIVIDE, Variant::VECTOR2, Variant::INT);
-
 	register_op<OperatorEvaluatorDiv<Vector3, Vector3, Vector3>>(Variant::OP_DIVIDE, Variant::VECTOR3, Variant::VECTOR3);
 	register_op<OperatorEvaluatorDiv<Vector3, Vector3, double>>(Variant::OP_DIVIDE, Variant::VECTOR3, Variant::FLOAT);
 	register_op<OperatorEvaluatorDiv<Vector3, Vector3, int64_t>>(Variant::OP_DIVIDE, Variant::VECTOR3, Variant::INT);
@@ -403,6 +414,15 @@ void Variant::_register_variant_operators() {
 	register_op<OperatorEvaluatorDivNZ<Vector4i, Vector4i, Vector4i>>(Variant::OP_DIVIDE, Variant::VECTOR4I, Variant::VECTOR4I);
 	register_op<OperatorEvaluatorDivNZ<Vector4, Vector4i, double>>(Variant::OP_DIVIDE, Variant::VECTOR4I, Variant::FLOAT);
 	register_op<OperatorEvaluatorDivNZ<Vector4i, Vector4i, int64_t>>(Variant::OP_DIVIDE, Variant::VECTOR4I, Variant::INT);
+
+	register_op<OperatorEvaluatorDiv<Transform2D, Transform2D, int64_t>>(Variant::OP_DIVIDE, Variant::TRANSFORM2D, Variant::INT);
+	register_op<OperatorEvaluatorDiv<Transform2D, Transform2D, double>>(Variant::OP_DIVIDE, Variant::TRANSFORM2D, Variant::FLOAT);
+
+	register_op<OperatorEvaluatorDiv<Transform3D, Transform3D, int64_t>>(Variant::OP_DIVIDE, Variant::TRANSFORM3D, Variant::INT);
+	register_op<OperatorEvaluatorDiv<Transform3D, Transform3D, double>>(Variant::OP_DIVIDE, Variant::TRANSFORM3D, Variant::FLOAT);
+
+	register_op<OperatorEvaluatorDiv<Basis, Basis, int64_t>>(Variant::OP_DIVIDE, Variant::BASIS, Variant::INT);
+	register_op<OperatorEvaluatorDiv<Basis, Basis, double>>(Variant::OP_DIVIDE, Variant::BASIS, Variant::FLOAT);
 
 	register_op<OperatorEvaluatorDiv<Quaternion, Quaternion, double>>(Variant::OP_DIVIDE, Variant::QUATERNION, Variant::FLOAT);
 	register_op<OperatorEvaluatorDiv<Quaternion, Quaternion, int64_t>>(Variant::OP_DIVIDE, Variant::QUATERNION, Variant::INT);
@@ -421,46 +441,47 @@ void Variant::_register_variant_operators() {
 	register_op<OperatorEvaluatorModNZ<Vector4i, Vector4i, Vector4i>>(Variant::OP_MODULE, Variant::VECTOR4I, Variant::VECTOR4I);
 	register_op<OperatorEvaluatorModNZ<Vector4i, Vector4i, int64_t>>(Variant::OP_MODULE, Variant::VECTOR4I, Variant::INT);
 
-	register_op<OperatorEvaluatorStringModNil>(Variant::OP_MODULE, Variant::STRING, Variant::NIL);
+	register_string_modulo_op(void, Variant::NIL);
 
-	register_op<OperatorEvaluatorStringModT<bool>>(Variant::OP_MODULE, Variant::STRING, Variant::BOOL);
-	register_op<OperatorEvaluatorStringModT<int64_t>>(Variant::OP_MODULE, Variant::STRING, Variant::INT);
-	register_op<OperatorEvaluatorStringModT<double>>(Variant::OP_MODULE, Variant::STRING, Variant::FLOAT);
-	register_op<OperatorEvaluatorStringModT<String>>(Variant::OP_MODULE, Variant::STRING, Variant::STRING);
-	register_op<OperatorEvaluatorStringModT<Vector2>>(Variant::OP_MODULE, Variant::STRING, Variant::VECTOR2);
-	register_op<OperatorEvaluatorStringModT<Vector2i>>(Variant::OP_MODULE, Variant::STRING, Variant::VECTOR2I);
-	register_op<OperatorEvaluatorStringModT<Rect2>>(Variant::OP_MODULE, Variant::STRING, Variant::RECT2);
-	register_op<OperatorEvaluatorStringModT<Rect2i>>(Variant::OP_MODULE, Variant::STRING, Variant::RECT2I);
-	register_op<OperatorEvaluatorStringModT<Vector3>>(Variant::OP_MODULE, Variant::STRING, Variant::VECTOR3);
-	register_op<OperatorEvaluatorStringModT<Vector3i>>(Variant::OP_MODULE, Variant::STRING, Variant::VECTOR3I);
-	register_op<OperatorEvaluatorStringModT<Vector4>>(Variant::OP_MODULE, Variant::STRING, Variant::VECTOR4);
-	register_op<OperatorEvaluatorStringModT<Vector4i>>(Variant::OP_MODULE, Variant::STRING, Variant::VECTOR4I);
-	register_op<OperatorEvaluatorStringModT<Transform2D>>(Variant::OP_MODULE, Variant::STRING, Variant::TRANSFORM2D);
-	register_op<OperatorEvaluatorStringModT<Plane>>(Variant::OP_MODULE, Variant::STRING, Variant::PLANE);
-	register_op<OperatorEvaluatorStringModT<Quaternion>>(Variant::OP_MODULE, Variant::STRING, Variant::QUATERNION);
-	register_op<OperatorEvaluatorStringModT<::AABB>>(Variant::OP_MODULE, Variant::STRING, Variant::AABB);
-	register_op<OperatorEvaluatorStringModT<Basis>>(Variant::OP_MODULE, Variant::STRING, Variant::BASIS);
-	register_op<OperatorEvaluatorStringModT<Transform3D>>(Variant::OP_MODULE, Variant::STRING, Variant::TRANSFORM3D);
-	register_op<OperatorEvaluatorStringModT<Projection>>(Variant::OP_MODULE, Variant::STRING, Variant::PROJECTION);
+	register_string_modulo_op(bool, Variant::BOOL);
+	register_string_modulo_op(int64_t, Variant::INT);
+	register_string_modulo_op(double, Variant::FLOAT);
+	register_string_modulo_op(String, Variant::STRING);
+	register_string_modulo_op(Vector2, Variant::VECTOR2);
+	register_string_modulo_op(Vector2i, Variant::VECTOR2I);
+	register_string_modulo_op(Rect2, Variant::RECT2);
+	register_string_modulo_op(Rect2i, Variant::RECT2I);
+	register_string_modulo_op(Vector3, Variant::VECTOR3);
+	register_string_modulo_op(Vector3i, Variant::VECTOR3I);
+	register_string_modulo_op(Vector4, Variant::VECTOR4);
+	register_string_modulo_op(Vector4i, Variant::VECTOR4I);
+	register_string_modulo_op(Transform2D, Variant::TRANSFORM2D);
+	register_string_modulo_op(Plane, Variant::PLANE);
+	register_string_modulo_op(Quaternion, Variant::QUATERNION);
+	register_string_modulo_op(::AABB, Variant::AABB);
+	register_string_modulo_op(Basis, Variant::BASIS);
+	register_string_modulo_op(Transform3D, Variant::TRANSFORM3D);
+	register_string_modulo_op(Projection, Variant::PROJECTION);
 
-	register_op<OperatorEvaluatorStringModT<Color>>(Variant::OP_MODULE, Variant::STRING, Variant::COLOR);
-	register_op<OperatorEvaluatorStringModT<StringName>>(Variant::OP_MODULE, Variant::STRING, Variant::STRING_NAME);
-	register_op<OperatorEvaluatorStringModT<NodePath>>(Variant::OP_MODULE, Variant::STRING, Variant::NODE_PATH);
-	register_op<OperatorEvaluatorStringModObject>(Variant::OP_MODULE, Variant::STRING, Variant::OBJECT);
-	register_op<OperatorEvaluatorStringModT<Callable>>(Variant::OP_MODULE, Variant::STRING, Variant::CALLABLE);
-	register_op<OperatorEvaluatorStringModT<Signal>>(Variant::OP_MODULE, Variant::STRING, Variant::SIGNAL);
-	register_op<OperatorEvaluatorStringModT<Dictionary>>(Variant::OP_MODULE, Variant::STRING, Variant::DICTIONARY);
-	register_op<OperatorEvaluatorStringModArray>(Variant::OP_MODULE, Variant::STRING, Variant::ARRAY);
+	register_string_modulo_op(Color, Variant::COLOR);
+	register_string_modulo_op(StringName, Variant::STRING_NAME);
+	register_string_modulo_op(NodePath, Variant::NODE_PATH);
+	register_string_modulo_op(Object, Variant::OBJECT);
+	register_string_modulo_op(Callable, Variant::CALLABLE);
+	register_string_modulo_op(Signal, Variant::SIGNAL);
+	register_string_modulo_op(Dictionary, Variant::DICTIONARY);
+	register_string_modulo_op(Array, Variant::ARRAY);
 
-	register_op<OperatorEvaluatorStringModT<PackedByteArray>>(Variant::OP_MODULE, Variant::STRING, Variant::PACKED_BYTE_ARRAY);
-	register_op<OperatorEvaluatorStringModT<PackedInt32Array>>(Variant::OP_MODULE, Variant::STRING, Variant::PACKED_INT32_ARRAY);
-	register_op<OperatorEvaluatorStringModT<PackedInt64Array>>(Variant::OP_MODULE, Variant::STRING, Variant::PACKED_INT64_ARRAY);
-	register_op<OperatorEvaluatorStringModT<PackedFloat32Array>>(Variant::OP_MODULE, Variant::STRING, Variant::PACKED_FLOAT32_ARRAY);
-	register_op<OperatorEvaluatorStringModT<PackedFloat64Array>>(Variant::OP_MODULE, Variant::STRING, Variant::PACKED_FLOAT64_ARRAY);
-	register_op<OperatorEvaluatorStringModT<PackedStringArray>>(Variant::OP_MODULE, Variant::STRING, Variant::PACKED_STRING_ARRAY);
-	register_op<OperatorEvaluatorStringModT<PackedVector2Array>>(Variant::OP_MODULE, Variant::STRING, Variant::PACKED_VECTOR2_ARRAY);
-	register_op<OperatorEvaluatorStringModT<PackedVector3Array>>(Variant::OP_MODULE, Variant::STRING, Variant::PACKED_VECTOR3_ARRAY);
-	register_op<OperatorEvaluatorStringModT<PackedColorArray>>(Variant::OP_MODULE, Variant::STRING, Variant::PACKED_COLOR_ARRAY);
+	register_string_modulo_op(PackedByteArray, Variant::PACKED_BYTE_ARRAY);
+	register_string_modulo_op(PackedInt32Array, Variant::PACKED_INT32_ARRAY);
+	register_string_modulo_op(PackedInt64Array, Variant::PACKED_INT64_ARRAY);
+	register_string_modulo_op(PackedFloat32Array, Variant::PACKED_FLOAT32_ARRAY);
+	register_string_modulo_op(PackedFloat64Array, Variant::PACKED_FLOAT64_ARRAY);
+	register_string_modulo_op(PackedStringArray, Variant::PACKED_STRING_ARRAY);
+	register_string_modulo_op(PackedVector2Array, Variant::PACKED_VECTOR2_ARRAY);
+	register_string_modulo_op(PackedVector3Array, Variant::PACKED_VECTOR3_ARRAY);
+	register_string_modulo_op(PackedColorArray, Variant::PACKED_COLOR_ARRAY);
+	register_string_modulo_op(PackedVector4Array, Variant::PACKED_VECTOR4_ARRAY);
 
 	register_op<OperatorEvaluatorPow<int64_t, int64_t, int64_t>>(Variant::OP_POWER, Variant::INT, Variant::INT);
 	register_op<OperatorEvaluatorPow<double, int64_t, double>>(Variant::OP_POWER, Variant::INT, Variant::FLOAT);
@@ -498,15 +519,13 @@ void Variant::_register_variant_operators() {
 	register_op<OperatorEvaluatorBitXor<int64_t, int64_t, int64_t>>(Variant::OP_BIT_XOR, Variant::INT, Variant::INT);
 	register_op<OperatorEvaluatorBitNeg<int64_t, int64_t>>(Variant::OP_BIT_NEGATE, Variant::INT, Variant::NIL);
 
-	register_op<OperatorEvaluatorBitNeg<int64_t, int64_t>>(Variant::OP_BIT_NEGATE, Variant::INT, Variant::NIL);
-
 	register_op<OperatorEvaluatorAlwaysTrue<Variant::OP_EQUAL, Variant::NIL, Variant::NIL>>(Variant::OP_EQUAL, Variant::NIL, Variant::NIL);
 	register_op<OperatorEvaluatorEqual<bool, bool>>(Variant::OP_EQUAL, Variant::BOOL, Variant::BOOL);
 	register_op<OperatorEvaluatorEqual<int64_t, int64_t>>(Variant::OP_EQUAL, Variant::INT, Variant::INT);
 	register_op<OperatorEvaluatorEqual<int64_t, double>>(Variant::OP_EQUAL, Variant::INT, Variant::FLOAT);
 	register_op<OperatorEvaluatorEqual<double, int64_t>>(Variant::OP_EQUAL, Variant::FLOAT, Variant::INT);
 	register_op<OperatorEvaluatorEqual<double, double>>(Variant::OP_EQUAL, Variant::FLOAT, Variant::FLOAT);
-	register_op<OperatorEvaluatorEqual<String, String>>(Variant::OP_EQUAL, Variant::STRING, Variant::STRING);
+	register_string_op(OperatorEvaluatorEqual, Variant::OP_EQUAL);
 	register_op<OperatorEvaluatorEqual<Vector2, Vector2>>(Variant::OP_EQUAL, Variant::VECTOR2, Variant::VECTOR2);
 	register_op<OperatorEvaluatorEqual<Vector2i, Vector2i>>(Variant::OP_EQUAL, Variant::VECTOR2I, Variant::VECTOR2I);
 	register_op<OperatorEvaluatorEqual<Rect2, Rect2>>(Variant::OP_EQUAL, Variant::RECT2, Variant::RECT2);
@@ -523,10 +542,6 @@ void Variant::_register_variant_operators() {
 	register_op<OperatorEvaluatorEqual<Transform3D, Transform3D>>(Variant::OP_EQUAL, Variant::TRANSFORM3D, Variant::TRANSFORM3D);
 	register_op<OperatorEvaluatorEqual<Projection, Projection>>(Variant::OP_EQUAL, Variant::PROJECTION, Variant::PROJECTION);
 	register_op<OperatorEvaluatorEqual<Color, Color>>(Variant::OP_EQUAL, Variant::COLOR, Variant::COLOR);
-
-	register_op<OperatorEvaluatorEqual<StringName, String>>(Variant::OP_EQUAL, Variant::STRING_NAME, Variant::STRING);
-	register_op<OperatorEvaluatorEqual<String, StringName>>(Variant::OP_EQUAL, Variant::STRING, Variant::STRING_NAME);
-	register_op<OperatorEvaluatorEqual<StringName, StringName>>(Variant::OP_EQUAL, Variant::STRING_NAME, Variant::STRING_NAME);
 
 	register_op<OperatorEvaluatorEqual<NodePath, NodePath>>(Variant::OP_EQUAL, Variant::NODE_PATH, Variant::NODE_PATH);
 	register_op<OperatorEvaluatorEqual<::RID, ::RID>>(Variant::OP_EQUAL, Variant::RID, Variant::RID);
@@ -548,6 +563,7 @@ void Variant::_register_variant_operators() {
 	register_op<OperatorEvaluatorEqual<PackedVector2Array, PackedVector2Array>>(Variant::OP_EQUAL, Variant::PACKED_VECTOR2_ARRAY, Variant::PACKED_VECTOR2_ARRAY);
 	register_op<OperatorEvaluatorEqual<PackedVector3Array, PackedVector3Array>>(Variant::OP_EQUAL, Variant::PACKED_VECTOR3_ARRAY, Variant::PACKED_VECTOR3_ARRAY);
 	register_op<OperatorEvaluatorEqual<PackedColorArray, PackedColorArray>>(Variant::OP_EQUAL, Variant::PACKED_COLOR_ARRAY, Variant::PACKED_COLOR_ARRAY);
+	register_op<OperatorEvaluatorEqual<PackedVector4Array, PackedVector4Array>>(Variant::OP_EQUAL, Variant::PACKED_VECTOR4_ARRAY, Variant::PACKED_VECTOR4_ARRAY);
 
 	register_op<OperatorEvaluatorAlwaysFalse<Variant::OP_EQUAL, Variant::BOOL, Variant::NIL>>(Variant::OP_EQUAL, Variant::BOOL, Variant::NIL);
 	register_op<OperatorEvaluatorAlwaysFalse<Variant::OP_EQUAL, Variant::INT, Variant::NIL>>(Variant::OP_EQUAL, Variant::INT, Variant::NIL);
@@ -567,6 +583,7 @@ void Variant::_register_variant_operators() {
 	register_op<OperatorEvaluatorAlwaysFalse<Variant::OP_EQUAL, Variant::AABB, Variant::NIL>>(Variant::OP_EQUAL, Variant::AABB, Variant::NIL);
 	register_op<OperatorEvaluatorAlwaysFalse<Variant::OP_EQUAL, Variant::BASIS, Variant::NIL>>(Variant::OP_EQUAL, Variant::BASIS, Variant::NIL);
 	register_op<OperatorEvaluatorAlwaysFalse<Variant::OP_EQUAL, Variant::TRANSFORM3D, Variant::NIL>>(Variant::OP_EQUAL, Variant::TRANSFORM3D, Variant::NIL);
+	register_op<OperatorEvaluatorAlwaysFalse<Variant::OP_EQUAL, Variant::PROJECTION, Variant::NIL>>(Variant::OP_EQUAL, Variant::PROJECTION, Variant::NIL);
 	register_op<OperatorEvaluatorAlwaysFalse<Variant::OP_EQUAL, Variant::COLOR, Variant::NIL>>(Variant::OP_EQUAL, Variant::COLOR, Variant::NIL);
 	register_op<OperatorEvaluatorAlwaysFalse<Variant::OP_EQUAL, Variant::STRING_NAME, Variant::NIL>>(Variant::OP_EQUAL, Variant::STRING_NAME, Variant::NIL);
 	register_op<OperatorEvaluatorAlwaysFalse<Variant::OP_EQUAL, Variant::NODE_PATH, Variant::NIL>>(Variant::OP_EQUAL, Variant::NODE_PATH, Variant::NIL);
@@ -584,6 +601,7 @@ void Variant::_register_variant_operators() {
 	register_op<OperatorEvaluatorAlwaysFalse<Variant::OP_EQUAL, Variant::PACKED_VECTOR2_ARRAY, Variant::NIL>>(Variant::OP_EQUAL, Variant::PACKED_VECTOR2_ARRAY, Variant::NIL);
 	register_op<OperatorEvaluatorAlwaysFalse<Variant::OP_EQUAL, Variant::PACKED_VECTOR3_ARRAY, Variant::NIL>>(Variant::OP_EQUAL, Variant::PACKED_VECTOR3_ARRAY, Variant::NIL);
 	register_op<OperatorEvaluatorAlwaysFalse<Variant::OP_EQUAL, Variant::PACKED_COLOR_ARRAY, Variant::NIL>>(Variant::OP_EQUAL, Variant::PACKED_COLOR_ARRAY, Variant::NIL);
+	register_op<OperatorEvaluatorAlwaysFalse<Variant::OP_EQUAL, Variant::PACKED_VECTOR4_ARRAY, Variant::NIL>>(Variant::OP_EQUAL, Variant::PACKED_VECTOR4_ARRAY, Variant::NIL);
 
 	register_op<OperatorEvaluatorAlwaysFalse<Variant::OP_EQUAL, Variant::NIL, Variant::BOOL>>(Variant::OP_EQUAL, Variant::NIL, Variant::BOOL);
 	register_op<OperatorEvaluatorAlwaysFalse<Variant::OP_EQUAL, Variant::NIL, Variant::INT>>(Variant::OP_EQUAL, Variant::NIL, Variant::INT);
@@ -603,6 +621,7 @@ void Variant::_register_variant_operators() {
 	register_op<OperatorEvaluatorAlwaysFalse<Variant::OP_EQUAL, Variant::NIL, Variant::AABB>>(Variant::OP_EQUAL, Variant::NIL, Variant::AABB);
 	register_op<OperatorEvaluatorAlwaysFalse<Variant::OP_EQUAL, Variant::NIL, Variant::BASIS>>(Variant::OP_EQUAL, Variant::NIL, Variant::BASIS);
 	register_op<OperatorEvaluatorAlwaysFalse<Variant::OP_EQUAL, Variant::NIL, Variant::TRANSFORM3D>>(Variant::OP_EQUAL, Variant::NIL, Variant::TRANSFORM3D);
+	register_op<OperatorEvaluatorAlwaysFalse<Variant::OP_EQUAL, Variant::NIL, Variant::PROJECTION>>(Variant::OP_EQUAL, Variant::NIL, Variant::PROJECTION);
 	register_op<OperatorEvaluatorAlwaysFalse<Variant::OP_EQUAL, Variant::NIL, Variant::COLOR>>(Variant::OP_EQUAL, Variant::NIL, Variant::COLOR);
 	register_op<OperatorEvaluatorAlwaysFalse<Variant::OP_EQUAL, Variant::NIL, Variant::STRING_NAME>>(Variant::OP_EQUAL, Variant::NIL, Variant::STRING_NAME);
 	register_op<OperatorEvaluatorAlwaysFalse<Variant::OP_EQUAL, Variant::NIL, Variant::NODE_PATH>>(Variant::OP_EQUAL, Variant::NIL, Variant::NODE_PATH);
@@ -620,6 +639,7 @@ void Variant::_register_variant_operators() {
 	register_op<OperatorEvaluatorAlwaysFalse<Variant::OP_EQUAL, Variant::NIL, Variant::PACKED_VECTOR2_ARRAY>>(Variant::OP_EQUAL, Variant::NIL, Variant::PACKED_VECTOR2_ARRAY);
 	register_op<OperatorEvaluatorAlwaysFalse<Variant::OP_EQUAL, Variant::NIL, Variant::PACKED_VECTOR3_ARRAY>>(Variant::OP_EQUAL, Variant::NIL, Variant::PACKED_VECTOR3_ARRAY);
 	register_op<OperatorEvaluatorAlwaysFalse<Variant::OP_EQUAL, Variant::NIL, Variant::PACKED_COLOR_ARRAY>>(Variant::OP_EQUAL, Variant::NIL, Variant::PACKED_COLOR_ARRAY);
+	register_op<OperatorEvaluatorAlwaysFalse<Variant::OP_EQUAL, Variant::NIL, Variant::PACKED_VECTOR4_ARRAY>>(Variant::OP_EQUAL, Variant::NIL, Variant::PACKED_VECTOR4_ARRAY);
 
 	register_op<OperatorEvaluatorAlwaysFalse<Variant::OP_NOT_EQUAL, Variant::NIL, Variant::NIL>>(Variant::OP_NOT_EQUAL, Variant::NIL, Variant::NIL);
 	register_op<OperatorEvaluatorNotEqual<bool, bool>>(Variant::OP_NOT_EQUAL, Variant::BOOL, Variant::BOOL);
@@ -627,7 +647,7 @@ void Variant::_register_variant_operators() {
 	register_op<OperatorEvaluatorNotEqual<int64_t, double>>(Variant::OP_NOT_EQUAL, Variant::INT, Variant::FLOAT);
 	register_op<OperatorEvaluatorNotEqual<double, int64_t>>(Variant::OP_NOT_EQUAL, Variant::FLOAT, Variant::INT);
 	register_op<OperatorEvaluatorNotEqual<double, double>>(Variant::OP_NOT_EQUAL, Variant::FLOAT, Variant::FLOAT);
-	register_op<OperatorEvaluatorNotEqual<String, String>>(Variant::OP_NOT_EQUAL, Variant::STRING, Variant::STRING);
+	register_string_op(OperatorEvaluatorNotEqual, Variant::OP_NOT_EQUAL);
 	register_op<OperatorEvaluatorNotEqual<Vector2, Vector2>>(Variant::OP_NOT_EQUAL, Variant::VECTOR2, Variant::VECTOR2);
 	register_op<OperatorEvaluatorNotEqual<Vector2i, Vector2i>>(Variant::OP_NOT_EQUAL, Variant::VECTOR2I, Variant::VECTOR2I);
 	register_op<OperatorEvaluatorNotEqual<Rect2, Rect2>>(Variant::OP_NOT_EQUAL, Variant::RECT2, Variant::RECT2);
@@ -644,10 +664,6 @@ void Variant::_register_variant_operators() {
 	register_op<OperatorEvaluatorNotEqual<Transform3D, Transform3D>>(Variant::OP_NOT_EQUAL, Variant::TRANSFORM3D, Variant::TRANSFORM3D);
 	register_op<OperatorEvaluatorNotEqual<Projection, Projection>>(Variant::OP_NOT_EQUAL, Variant::PROJECTION, Variant::PROJECTION);
 	register_op<OperatorEvaluatorNotEqual<Color, Color>>(Variant::OP_NOT_EQUAL, Variant::COLOR, Variant::COLOR);
-
-	register_op<OperatorEvaluatorNotEqual<StringName, String>>(Variant::OP_NOT_EQUAL, Variant::STRING_NAME, Variant::STRING);
-	register_op<OperatorEvaluatorNotEqual<String, StringName>>(Variant::OP_NOT_EQUAL, Variant::STRING, Variant::STRING_NAME);
-	register_op<OperatorEvaluatorNotEqual<StringName, StringName>>(Variant::OP_NOT_EQUAL, Variant::STRING_NAME, Variant::STRING_NAME);
 
 	register_op<OperatorEvaluatorNotEqual<NodePath, NodePath>>(Variant::OP_NOT_EQUAL, Variant::NODE_PATH, Variant::NODE_PATH);
 	register_op<OperatorEvaluatorNotEqual<::RID, ::RID>>(Variant::OP_NOT_EQUAL, Variant::RID, Variant::RID);
@@ -669,6 +685,7 @@ void Variant::_register_variant_operators() {
 	register_op<OperatorEvaluatorNotEqual<PackedVector2Array, PackedVector2Array>>(Variant::OP_NOT_EQUAL, Variant::PACKED_VECTOR2_ARRAY, Variant::PACKED_VECTOR2_ARRAY);
 	register_op<OperatorEvaluatorNotEqual<PackedVector3Array, PackedVector3Array>>(Variant::OP_NOT_EQUAL, Variant::PACKED_VECTOR3_ARRAY, Variant::PACKED_VECTOR3_ARRAY);
 	register_op<OperatorEvaluatorNotEqual<PackedColorArray, PackedColorArray>>(Variant::OP_NOT_EQUAL, Variant::PACKED_COLOR_ARRAY, Variant::PACKED_COLOR_ARRAY);
+	register_op<OperatorEvaluatorNotEqual<PackedVector4Array, PackedVector4Array>>(Variant::OP_NOT_EQUAL, Variant::PACKED_VECTOR4_ARRAY, Variant::PACKED_VECTOR4_ARRAY);
 
 	register_op<OperatorEvaluatorAlwaysTrue<Variant::OP_NOT_EQUAL, Variant::BOOL, Variant::NIL>>(Variant::OP_NOT_EQUAL, Variant::BOOL, Variant::NIL);
 	register_op<OperatorEvaluatorAlwaysTrue<Variant::OP_NOT_EQUAL, Variant::INT, Variant::NIL>>(Variant::OP_NOT_EQUAL, Variant::INT, Variant::NIL);
@@ -688,6 +705,7 @@ void Variant::_register_variant_operators() {
 	register_op<OperatorEvaluatorAlwaysTrue<Variant::OP_NOT_EQUAL, Variant::AABB, Variant::NIL>>(Variant::OP_NOT_EQUAL, Variant::AABB, Variant::NIL);
 	register_op<OperatorEvaluatorAlwaysTrue<Variant::OP_NOT_EQUAL, Variant::BASIS, Variant::NIL>>(Variant::OP_NOT_EQUAL, Variant::BASIS, Variant::NIL);
 	register_op<OperatorEvaluatorAlwaysTrue<Variant::OP_NOT_EQUAL, Variant::TRANSFORM3D, Variant::NIL>>(Variant::OP_NOT_EQUAL, Variant::TRANSFORM3D, Variant::NIL);
+	register_op<OperatorEvaluatorAlwaysTrue<Variant::OP_NOT_EQUAL, Variant::PROJECTION, Variant::NIL>>(Variant::OP_NOT_EQUAL, Variant::PROJECTION, Variant::NIL);
 	register_op<OperatorEvaluatorAlwaysTrue<Variant::OP_NOT_EQUAL, Variant::COLOR, Variant::NIL>>(Variant::OP_NOT_EQUAL, Variant::COLOR, Variant::NIL);
 	register_op<OperatorEvaluatorAlwaysTrue<Variant::OP_NOT_EQUAL, Variant::STRING_NAME, Variant::NIL>>(Variant::OP_NOT_EQUAL, Variant::STRING_NAME, Variant::NIL);
 	register_op<OperatorEvaluatorAlwaysTrue<Variant::OP_NOT_EQUAL, Variant::NODE_PATH, Variant::NIL>>(Variant::OP_NOT_EQUAL, Variant::NODE_PATH, Variant::NIL);
@@ -705,6 +723,7 @@ void Variant::_register_variant_operators() {
 	register_op<OperatorEvaluatorAlwaysTrue<Variant::OP_NOT_EQUAL, Variant::PACKED_VECTOR2_ARRAY, Variant::NIL>>(Variant::OP_NOT_EQUAL, Variant::PACKED_VECTOR2_ARRAY, Variant::NIL);
 	register_op<OperatorEvaluatorAlwaysTrue<Variant::OP_NOT_EQUAL, Variant::PACKED_VECTOR3_ARRAY, Variant::NIL>>(Variant::OP_NOT_EQUAL, Variant::PACKED_VECTOR3_ARRAY, Variant::NIL);
 	register_op<OperatorEvaluatorAlwaysTrue<Variant::OP_NOT_EQUAL, Variant::PACKED_COLOR_ARRAY, Variant::NIL>>(Variant::OP_NOT_EQUAL, Variant::PACKED_COLOR_ARRAY, Variant::NIL);
+	register_op<OperatorEvaluatorAlwaysTrue<Variant::OP_NOT_EQUAL, Variant::PACKED_VECTOR4_ARRAY, Variant::NIL>>(Variant::OP_NOT_EQUAL, Variant::PACKED_VECTOR4_ARRAY, Variant::NIL);
 
 	register_op<OperatorEvaluatorAlwaysTrue<Variant::OP_NOT_EQUAL, Variant::NIL, Variant::BOOL>>(Variant::OP_NOT_EQUAL, Variant::NIL, Variant::BOOL);
 	register_op<OperatorEvaluatorAlwaysTrue<Variant::OP_NOT_EQUAL, Variant::NIL, Variant::INT>>(Variant::OP_NOT_EQUAL, Variant::NIL, Variant::INT);
@@ -724,6 +743,7 @@ void Variant::_register_variant_operators() {
 	register_op<OperatorEvaluatorAlwaysTrue<Variant::OP_NOT_EQUAL, Variant::NIL, Variant::AABB>>(Variant::OP_NOT_EQUAL, Variant::NIL, Variant::AABB);
 	register_op<OperatorEvaluatorAlwaysTrue<Variant::OP_NOT_EQUAL, Variant::NIL, Variant::BASIS>>(Variant::OP_NOT_EQUAL, Variant::NIL, Variant::BASIS);
 	register_op<OperatorEvaluatorAlwaysTrue<Variant::OP_NOT_EQUAL, Variant::NIL, Variant::TRANSFORM3D>>(Variant::OP_NOT_EQUAL, Variant::NIL, Variant::TRANSFORM3D);
+	register_op<OperatorEvaluatorAlwaysTrue<Variant::OP_NOT_EQUAL, Variant::NIL, Variant::PROJECTION>>(Variant::OP_NOT_EQUAL, Variant::NIL, Variant::PROJECTION);
 	register_op<OperatorEvaluatorAlwaysTrue<Variant::OP_NOT_EQUAL, Variant::NIL, Variant::COLOR>>(Variant::OP_NOT_EQUAL, Variant::NIL, Variant::COLOR);
 	register_op<OperatorEvaluatorAlwaysTrue<Variant::OP_NOT_EQUAL, Variant::NIL, Variant::STRING_NAME>>(Variant::OP_NOT_EQUAL, Variant::NIL, Variant::STRING_NAME);
 	register_op<OperatorEvaluatorAlwaysTrue<Variant::OP_NOT_EQUAL, Variant::NIL, Variant::NODE_PATH>>(Variant::OP_NOT_EQUAL, Variant::NIL, Variant::NODE_PATH);
@@ -741,6 +761,7 @@ void Variant::_register_variant_operators() {
 	register_op<OperatorEvaluatorAlwaysTrue<Variant::OP_NOT_EQUAL, Variant::NIL, Variant::PACKED_VECTOR2_ARRAY>>(Variant::OP_NOT_EQUAL, Variant::NIL, Variant::PACKED_VECTOR2_ARRAY);
 	register_op<OperatorEvaluatorAlwaysTrue<Variant::OP_NOT_EQUAL, Variant::NIL, Variant::PACKED_VECTOR3_ARRAY>>(Variant::OP_NOT_EQUAL, Variant::NIL, Variant::PACKED_VECTOR3_ARRAY);
 	register_op<OperatorEvaluatorAlwaysTrue<Variant::OP_NOT_EQUAL, Variant::NIL, Variant::PACKED_COLOR_ARRAY>>(Variant::OP_NOT_EQUAL, Variant::NIL, Variant::PACKED_COLOR_ARRAY);
+	register_op<OperatorEvaluatorAlwaysTrue<Variant::OP_NOT_EQUAL, Variant::NIL, Variant::PACKED_VECTOR4_ARRAY>>(Variant::OP_NOT_EQUAL, Variant::NIL, Variant::PACKED_VECTOR4_ARRAY);
 
 	register_op<OperatorEvaluatorLess<bool, bool>>(Variant::OP_LESS, Variant::BOOL, Variant::BOOL);
 	register_op<OperatorEvaluatorLess<int64_t, int64_t>>(Variant::OP_LESS, Variant::INT, Variant::INT);
@@ -898,11 +919,42 @@ void Variant::_register_variant_operators() {
 	register_op<OperatorEvaluatorNotInt>(Variant::OP_NOT, Variant::INT, Variant::NIL);
 	register_op<OperatorEvaluatorNotFloat>(Variant::OP_NOT, Variant::FLOAT, Variant::NIL);
 	register_op<OperatorEvaluatorNotObject>(Variant::OP_NOT, Variant::OBJECT, Variant::NIL);
+	register_op<OperatorEvaluatorNot<String>>(Variant::OP_NOT, Variant::STRING, Variant::NIL);
+	register_op<OperatorEvaluatorNot<Vector2>>(Variant::OP_NOT, Variant::VECTOR2, Variant::NIL);
+	register_op<OperatorEvaluatorNot<Vector2i>>(Variant::OP_NOT, Variant::VECTOR2I, Variant::NIL);
+	register_op<OperatorEvaluatorNot<Rect2>>(Variant::OP_NOT, Variant::RECT2, Variant::NIL);
+	register_op<OperatorEvaluatorNot<Rect2i>>(Variant::OP_NOT, Variant::RECT2I, Variant::NIL);
+	register_op<OperatorEvaluatorNot<Vector3>>(Variant::OP_NOT, Variant::VECTOR3, Variant::NIL);
+	register_op<OperatorEvaluatorNot<Vector3i>>(Variant::OP_NOT, Variant::VECTOR3I, Variant::NIL);
+	register_op<OperatorEvaluatorNot<Transform2D>>(Variant::OP_NOT, Variant::TRANSFORM2D, Variant::NIL);
+	register_op<OperatorEvaluatorNot<Vector4>>(Variant::OP_NOT, Variant::VECTOR4, Variant::NIL);
+	register_op<OperatorEvaluatorNot<Vector4i>>(Variant::OP_NOT, Variant::VECTOR4I, Variant::NIL);
+	register_op<OperatorEvaluatorNot<Plane>>(Variant::OP_NOT, Variant::PLANE, Variant::NIL);
+	register_op<OperatorEvaluatorNot<Quaternion>>(Variant::OP_NOT, Variant::QUATERNION, Variant::NIL);
+	register_op<OperatorEvaluatorNot<::AABB>>(Variant::OP_NOT, Variant::AABB, Variant::NIL);
+	register_op<OperatorEvaluatorNot<Basis>>(Variant::OP_NOT, Variant::BASIS, Variant::NIL);
+	register_op<OperatorEvaluatorNot<Transform3D>>(Variant::OP_NOT, Variant::TRANSFORM3D, Variant::NIL);
+	register_op<OperatorEvaluatorNot<Projection>>(Variant::OP_NOT, Variant::PROJECTION, Variant::NIL);
+	register_op<OperatorEvaluatorNot<Color>>(Variant::OP_NOT, Variant::COLOR, Variant::NIL);
+	register_op<OperatorEvaluatorNot<StringName>>(Variant::OP_NOT, Variant::STRING_NAME, Variant::NIL);
+	register_op<OperatorEvaluatorNot<NodePath>>(Variant::OP_NOT, Variant::NODE_PATH, Variant::NIL);
+	register_op<OperatorEvaluatorNot<::RID>>(Variant::OP_NOT, Variant::RID, Variant::NIL);
+	register_op<OperatorEvaluatorNot<Callable>>(Variant::OP_NOT, Variant::CALLABLE, Variant::NIL);
+	register_op<OperatorEvaluatorNot<Signal>>(Variant::OP_NOT, Variant::SIGNAL, Variant::NIL);
+	register_op<OperatorEvaluatorNot<Dictionary>>(Variant::OP_NOT, Variant::DICTIONARY, Variant::NIL);
+	register_op<OperatorEvaluatorNot<Array>>(Variant::OP_NOT, Variant::ARRAY, Variant::NIL);
+	register_op<OperatorEvaluatorNot<PackedByteArray>>(Variant::OP_NOT, Variant::PACKED_BYTE_ARRAY, Variant::NIL);
+	register_op<OperatorEvaluatorNot<PackedInt32Array>>(Variant::OP_NOT, Variant::PACKED_INT32_ARRAY, Variant::NIL);
+	register_op<OperatorEvaluatorNot<PackedInt64Array>>(Variant::OP_NOT, Variant::PACKED_INT64_ARRAY, Variant::NIL);
+	register_op<OperatorEvaluatorNot<PackedFloat32Array>>(Variant::OP_NOT, Variant::PACKED_FLOAT32_ARRAY, Variant::NIL);
+	register_op<OperatorEvaluatorNot<PackedFloat64Array>>(Variant::OP_NOT, Variant::PACKED_FLOAT64_ARRAY, Variant::NIL);
+	register_op<OperatorEvaluatorNot<PackedStringArray>>(Variant::OP_NOT, Variant::PACKED_STRING_ARRAY, Variant::NIL);
+	register_op<OperatorEvaluatorNot<PackedVector2Array>>(Variant::OP_NOT, Variant::PACKED_VECTOR2_ARRAY, Variant::NIL);
+	register_op<OperatorEvaluatorNot<PackedVector3Array>>(Variant::OP_NOT, Variant::PACKED_VECTOR3_ARRAY, Variant::NIL);
+	register_op<OperatorEvaluatorNot<PackedColorArray>>(Variant::OP_NOT, Variant::PACKED_COLOR_ARRAY, Variant::NIL);
+	register_op<OperatorEvaluatorNot<PackedVector4Array>>(Variant::OP_NOT, Variant::PACKED_VECTOR4_ARRAY, Variant::NIL);
 
-	register_op<OperatorEvaluatorInStringFind<String>>(Variant::OP_IN, Variant::STRING, Variant::STRING);
-	register_op<OperatorEvaluatorInStringFind<StringName>>(Variant::OP_IN, Variant::STRING_NAME, Variant::STRING);
-	register_op<OperatorEvaluatorInStringNameFind<String>>(Variant::OP_IN, Variant::STRING, Variant::STRING_NAME);
-	register_op<OperatorEvaluatorInStringNameFind<StringName>>(Variant::OP_IN, Variant::STRING_NAME, Variant::STRING_NAME);
+	register_string_op(OperatorEvaluatorInStringFind, Variant::OP_IN);
 
 	register_op<OperatorEvaluatorInDictionaryHasNil>(Variant::OP_IN, Variant::NIL, Variant::DICTIONARY);
 	register_op<OperatorEvaluatorInDictionaryHas<bool>>(Variant::OP_IN, Variant::BOOL, Variant::DICTIONARY);
@@ -928,6 +980,7 @@ void Variant::_register_variant_operators() {
 	register_op<OperatorEvaluatorInDictionaryHas<Color>>(Variant::OP_IN, Variant::COLOR, Variant::DICTIONARY);
 	register_op<OperatorEvaluatorInDictionaryHas<StringName>>(Variant::OP_IN, Variant::STRING_NAME, Variant::DICTIONARY);
 	register_op<OperatorEvaluatorInDictionaryHas<NodePath>>(Variant::OP_IN, Variant::NODE_PATH, Variant::DICTIONARY);
+	register_op<OperatorEvaluatorInDictionaryHas<::RID>>(Variant::OP_IN, Variant::RID, Variant::DICTIONARY);
 	register_op<OperatorEvaluatorInDictionaryHasObject>(Variant::OP_IN, Variant::OBJECT, Variant::DICTIONARY);
 	register_op<OperatorEvaluatorInDictionaryHas<Callable>>(Variant::OP_IN, Variant::CALLABLE, Variant::DICTIONARY);
 	register_op<OperatorEvaluatorInDictionaryHas<Signal>>(Variant::OP_IN, Variant::SIGNAL, Variant::DICTIONARY);
@@ -943,6 +996,7 @@ void Variant::_register_variant_operators() {
 	register_op<OperatorEvaluatorInDictionaryHas<PackedVector2Array>>(Variant::OP_IN, Variant::PACKED_VECTOR2_ARRAY, Variant::DICTIONARY);
 	register_op<OperatorEvaluatorInDictionaryHas<PackedVector3Array>>(Variant::OP_IN, Variant::PACKED_VECTOR3_ARRAY, Variant::DICTIONARY);
 	register_op<OperatorEvaluatorInDictionaryHas<PackedColorArray>>(Variant::OP_IN, Variant::PACKED_COLOR_ARRAY, Variant::DICTIONARY);
+	register_op<OperatorEvaluatorInDictionaryHas<PackedVector4Array>>(Variant::OP_IN, Variant::PACKED_VECTOR4_ARRAY, Variant::DICTIONARY);
 
 	register_op<OperatorEvaluatorInArrayFindNil>(Variant::OP_IN, Variant::NIL, Variant::ARRAY);
 	register_op<OperatorEvaluatorInArrayFind<bool, Array>>(Variant::OP_IN, Variant::BOOL, Variant::ARRAY);
@@ -968,6 +1022,7 @@ void Variant::_register_variant_operators() {
 	register_op<OperatorEvaluatorInArrayFind<Color, Array>>(Variant::OP_IN, Variant::COLOR, Variant::ARRAY);
 	register_op<OperatorEvaluatorInArrayFind<StringName, Array>>(Variant::OP_IN, Variant::STRING_NAME, Variant::ARRAY);
 	register_op<OperatorEvaluatorInArrayFind<NodePath, Array>>(Variant::OP_IN, Variant::NODE_PATH, Variant::ARRAY);
+	register_op<OperatorEvaluatorInArrayFind<::RID, Array>>(Variant::OP_IN, Variant::RID, Variant::ARRAY);
 	register_op<OperatorEvaluatorInArrayFindObject>(Variant::OP_IN, Variant::OBJECT, Variant::ARRAY);
 	register_op<OperatorEvaluatorInArrayFind<Callable, Array>>(Variant::OP_IN, Variant::CALLABLE, Variant::ARRAY);
 	register_op<OperatorEvaluatorInArrayFind<Signal, Array>>(Variant::OP_IN, Variant::SIGNAL, Variant::ARRAY);
@@ -983,32 +1038,37 @@ void Variant::_register_variant_operators() {
 	register_op<OperatorEvaluatorInArrayFind<PackedVector2Array, Array>>(Variant::OP_IN, Variant::PACKED_VECTOR2_ARRAY, Variant::ARRAY);
 	register_op<OperatorEvaluatorInArrayFind<PackedVector3Array, Array>>(Variant::OP_IN, Variant::PACKED_VECTOR3_ARRAY, Variant::ARRAY);
 	register_op<OperatorEvaluatorInArrayFind<PackedColorArray, Array>>(Variant::OP_IN, Variant::PACKED_COLOR_ARRAY, Variant::ARRAY);
+	register_op<OperatorEvaluatorInArrayFind<PackedVector4Array, Array>>(Variant::OP_IN, Variant::PACKED_VECTOR4_ARRAY, Variant::ARRAY);
 
-	register_op<OperatorEvaluatorInArrayFind<int, PackedByteArray>>(Variant::OP_IN, Variant::INT, Variant::PACKED_BYTE_ARRAY);
-	register_op<OperatorEvaluatorInArrayFind<float, PackedByteArray>>(Variant::OP_IN, Variant::FLOAT, Variant::PACKED_BYTE_ARRAY);
+	register_op<OperatorEvaluatorInArrayFind<int64_t, PackedByteArray>>(Variant::OP_IN, Variant::INT, Variant::PACKED_BYTE_ARRAY);
+	register_op<OperatorEvaluatorInArrayFind<double, PackedByteArray>>(Variant::OP_IN, Variant::FLOAT, Variant::PACKED_BYTE_ARRAY);
 
-	register_op<OperatorEvaluatorInArrayFind<int, PackedInt32Array>>(Variant::OP_IN, Variant::INT, Variant::PACKED_INT32_ARRAY);
-	register_op<OperatorEvaluatorInArrayFind<float, PackedInt32Array>>(Variant::OP_IN, Variant::FLOAT, Variant::PACKED_INT32_ARRAY);
+	register_op<OperatorEvaluatorInArrayFind<int64_t, PackedInt32Array>>(Variant::OP_IN, Variant::INT, Variant::PACKED_INT32_ARRAY);
+	register_op<OperatorEvaluatorInArrayFind<double, PackedInt32Array>>(Variant::OP_IN, Variant::FLOAT, Variant::PACKED_INT32_ARRAY);
 
-	register_op<OperatorEvaluatorInArrayFind<int, PackedInt64Array>>(Variant::OP_IN, Variant::INT, Variant::PACKED_INT64_ARRAY);
-	register_op<OperatorEvaluatorInArrayFind<float, PackedInt64Array>>(Variant::OP_IN, Variant::FLOAT, Variant::PACKED_INT64_ARRAY);
+	register_op<OperatorEvaluatorInArrayFind<int64_t, PackedInt64Array>>(Variant::OP_IN, Variant::INT, Variant::PACKED_INT64_ARRAY);
+	register_op<OperatorEvaluatorInArrayFind<double, PackedInt64Array>>(Variant::OP_IN, Variant::FLOAT, Variant::PACKED_INT64_ARRAY);
 
-	register_op<OperatorEvaluatorInArrayFind<int, PackedFloat32Array>>(Variant::OP_IN, Variant::INT, Variant::PACKED_FLOAT32_ARRAY);
-	register_op<OperatorEvaluatorInArrayFind<float, PackedFloat32Array>>(Variant::OP_IN, Variant::FLOAT, Variant::PACKED_FLOAT32_ARRAY);
+	register_op<OperatorEvaluatorInArrayFind<int64_t, PackedFloat32Array>>(Variant::OP_IN, Variant::INT, Variant::PACKED_FLOAT32_ARRAY);
+	register_op<OperatorEvaluatorInArrayFind<double, PackedFloat32Array>>(Variant::OP_IN, Variant::FLOAT, Variant::PACKED_FLOAT32_ARRAY);
 
-	register_op<OperatorEvaluatorInArrayFind<int, PackedFloat64Array>>(Variant::OP_IN, Variant::INT, Variant::PACKED_FLOAT64_ARRAY);
-	register_op<OperatorEvaluatorInArrayFind<float, PackedFloat64Array>>(Variant::OP_IN, Variant::FLOAT, Variant::PACKED_FLOAT64_ARRAY);
+	register_op<OperatorEvaluatorInArrayFind<int64_t, PackedFloat64Array>>(Variant::OP_IN, Variant::INT, Variant::PACKED_FLOAT64_ARRAY);
+	register_op<OperatorEvaluatorInArrayFind<double, PackedFloat64Array>>(Variant::OP_IN, Variant::FLOAT, Variant::PACKED_FLOAT64_ARRAY);
 
 	register_op<OperatorEvaluatorInArrayFind<String, PackedStringArray>>(Variant::OP_IN, Variant::STRING, Variant::PACKED_STRING_ARRAY);
+	register_op<OperatorEvaluatorInArrayFind<StringName, PackedStringArray>>(Variant::OP_IN, Variant::STRING_NAME, Variant::PACKED_STRING_ARRAY);
 
 	register_op<OperatorEvaluatorInArrayFind<Vector2, PackedVector2Array>>(Variant::OP_IN, Variant::VECTOR2, Variant::PACKED_VECTOR2_ARRAY);
 	register_op<OperatorEvaluatorInArrayFind<Vector3, PackedVector3Array>>(Variant::OP_IN, Variant::VECTOR3, Variant::PACKED_VECTOR3_ARRAY);
-
 	register_op<OperatorEvaluatorInArrayFind<Color, PackedColorArray>>(Variant::OP_IN, Variant::COLOR, Variant::PACKED_COLOR_ARRAY);
+	register_op<OperatorEvaluatorInArrayFind<Vector4, PackedVector4Array>>(Variant::OP_IN, Variant::VECTOR4, Variant::PACKED_VECTOR4_ARRAY);
 
 	register_op<OperatorEvaluatorObjectHasPropertyString>(Variant::OP_IN, Variant::STRING, Variant::OBJECT);
 	register_op<OperatorEvaluatorObjectHasPropertyStringName>(Variant::OP_IN, Variant::STRING_NAME, Variant::OBJECT);
 }
+
+#undef register_string_op
+#undef register_string_modulo_op
 
 void Variant::_unregister_variant_operators() {
 }
@@ -1102,8 +1162,11 @@ bool Variant::in(const Variant &p_index, bool *r_valid) const {
 	evaluate(OP_IN, p_index, *this, ret, valid);
 	if (r_valid) {
 		*r_valid = valid;
+	}
+	if (valid) {
+		ERR_FAIL_COND_V(ret.type != BOOL, false);
+		return *VariantGetInternalPtr<bool>::get_ptr(&ret);
+	} else {
 		return false;
 	}
-	ERR_FAIL_COND_V(ret.type != BOOL, false);
-	return *VariantGetInternalPtr<bool>::get_ptr(&ret);
 }

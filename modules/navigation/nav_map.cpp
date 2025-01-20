@@ -1,67 +1,136 @@
-/*************************************************************************/
-/*  nav_map.cpp                                                          */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  nav_map.cpp                                                           */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #include "nav_map.h"
 
-#include "core/object/worker_thread_pool.h"
+#include "3d/nav_map_builder_3d.h"
+#include "3d/nav_mesh_queries_3d.h"
+#include "3d/nav_region_iteration_3d.h"
+#include "nav_agent.h"
 #include "nav_link.h"
+#include "nav_obstacle.h"
 #include "nav_region.h"
-#include "rvo_agent.h"
-#include <algorithm>
 
-#define THREE_POINTS_CROSS_PRODUCT(m_a, m_b, m_c) (((m_c) - (m_a)).cross((m_b) - (m_a)))
+#include "core/config/project_settings.h"
+#include "core/object/worker_thread_pool.h"
+
+#include <Obstacle2d.h>
+
+#ifdef DEBUG_ENABLED
+#define NAVMAP_ITERATION_ZERO_ERROR_MSG() \
+	ERR_PRINT_ONCE("NavigationServer navigation map query failed because it was made before first map synchronization.\n\
+	NavigationServer 'map_changed' signal can be used to receive update notifications.\n\
+	NavigationServer 'map_get_iteration_id()' can be used to check if a map has finished its newest iteration.");
+#else
+#define NAVMAP_ITERATION_ZERO_ERROR_MSG()
+#endif // DEBUG_ENABLED
+
+#define GET_MAP_ITERATION()                                                 \
+	iteration_slot_rwlock.read_lock();                                      \
+	NavMapIteration &map_iteration = iteration_slots[iteration_slot_index]; \
+	NavMapIterationRead iteration_read_lock(map_iteration);                 \
+	iteration_slot_rwlock.read_unlock();
+
+#define GET_MAP_ITERATION_CONST()                                                 \
+	iteration_slot_rwlock.read_lock();                                            \
+	const NavMapIteration &map_iteration = iteration_slots[iteration_slot_index]; \
+	NavMapIterationRead iteration_read_lock(map_iteration);                       \
+	iteration_slot_rwlock.read_unlock();
 
 void NavMap::set_up(Vector3 p_up) {
+	if (up == p_up) {
+		return;
+	}
 	up = p_up;
-	regenerate_polygons = true;
+	map_settings_dirty = true;
 }
 
-void NavMap::set_cell_size(float p_cell_size) {
-	cell_size = p_cell_size;
-	regenerate_polygons = true;
+void NavMap::set_cell_size(real_t p_cell_size) {
+	if (cell_size == p_cell_size) {
+		return;
+	}
+	cell_size = MAX(p_cell_size, NavigationDefaults3D::navmesh_cell_size_min);
+	_update_merge_rasterizer_cell_dimensions();
+	map_settings_dirty = true;
 }
 
-void NavMap::set_edge_connection_margin(float p_edge_connection_margin) {
+void NavMap::set_cell_height(real_t p_cell_height) {
+	if (cell_height == p_cell_height) {
+		return;
+	}
+	cell_height = MAX(p_cell_height, NavigationDefaults3D::navmesh_cell_size_min);
+	_update_merge_rasterizer_cell_dimensions();
+	map_settings_dirty = true;
+}
+
+void NavMap::set_merge_rasterizer_cell_scale(float p_value) {
+	if (merge_rasterizer_cell_scale == p_value) {
+		return;
+	}
+	merge_rasterizer_cell_scale = MAX(p_value, NavigationDefaults3D::navmesh_cell_size_min);
+	_update_merge_rasterizer_cell_dimensions();
+	map_settings_dirty = true;
+}
+
+void NavMap::set_use_edge_connections(bool p_enabled) {
+	if (use_edge_connections == p_enabled) {
+		return;
+	}
+	use_edge_connections = p_enabled;
+	iteration_dirty = true;
+}
+
+void NavMap::set_edge_connection_margin(real_t p_edge_connection_margin) {
+	if (edge_connection_margin == p_edge_connection_margin) {
+		return;
+	}
 	edge_connection_margin = p_edge_connection_margin;
-	regenerate_links = true;
+	iteration_dirty = true;
 }
 
-void NavMap::set_link_connection_radius(float p_link_connection_radius) {
+void NavMap::set_link_connection_radius(real_t p_link_connection_radius) {
+	if (link_connection_radius == p_link_connection_radius) {
+		return;
+	}
 	link_connection_radius = p_link_connection_radius;
-	regenerate_links = true;
+	iteration_dirty = true;
+}
+
+const Vector3 &NavMap::get_merge_rasterizer_cell_size() const {
+	return merge_rasterizer_cell_size;
 }
 
 gd::PointKey NavMap::get_point_key(const Vector3 &p_pos) const {
-	const int x = int(Math::floor(p_pos.x / cell_size));
-	const int y = int(Math::floor(p_pos.y / cell_size));
-	const int z = int(Math::floor(p_pos.z / cell_size));
+	const int x = static_cast<int>(Math::floor(p_pos.x / merge_rasterizer_cell_size.x));
+	const int y = static_cast<int>(Math::floor(p_pos.y / merge_rasterizer_cell_size.y));
+	const int z = static_cast<int>(Math::floor(p_pos.z / merge_rasterizer_cell_size.z));
 
 	gd::PointKey p;
 	p.key = 0;
@@ -71,806 +140,743 @@ gd::PointKey NavMap::get_point_key(const Vector3 &p_pos) const {
 	return p;
 }
 
-Vector<Vector3> NavMap::get_path(Vector3 p_origin, Vector3 p_destination, bool p_optimize, uint32_t p_navigation_layers) const {
-	// Find the start poly and the end poly on this map.
-	const gd::Polygon *begin_poly = nullptr;
-	const gd::Polygon *end_poly = nullptr;
-	Vector3 begin_point;
-	Vector3 end_point;
-	float begin_d = 1e20;
-	float end_d = 1e20;
-	// Find the initial poly and the end poly on this map.
-	for (size_t i(0); i < polygons.size(); i++) {
-		const gd::Polygon &p = polygons[i];
-
-		// Only consider the polygon if it in a region with compatible layers.
-		if ((p_navigation_layers & p.owner->get_navigation_layers()) == 0) {
-			continue;
-		}
-
-		// For each face check the distance between the origin/destination
-		for (size_t point_id = 2; point_id < p.points.size(); point_id++) {
-			const Face3 face(p.points[0].pos, p.points[point_id - 1].pos, p.points[point_id].pos);
-
-			Vector3 point = face.get_closest_point_to(p_origin);
-			float distance_to_point = point.distance_to(p_origin);
-			if (distance_to_point < begin_d) {
-				begin_d = distance_to_point;
-				begin_poly = &p;
-				begin_point = point;
-			}
-
-			point = face.get_closest_point_to(p_destination);
-			distance_to_point = point.distance_to(p_destination);
-			if (distance_to_point < end_d) {
-				end_d = distance_to_point;
-				end_poly = &p;
-				end_point = point;
-			}
-		}
+void NavMap::query_path(NavMeshQueries3D::NavMeshPathQueryTask3D &p_query_task) {
+	if (iteration_id == 0) {
+		return;
 	}
 
-	// Check for trivial cases
-	if (!begin_poly || !end_poly) {
-		return Vector<Vector3>();
-	}
-	if (begin_poly == end_poly) {
-		Vector<Vector3> path;
-		path.resize(2);
-		path.write[0] = begin_point;
-		path.write[1] = end_point;
-		return path;
-	}
+	GET_MAP_ITERATION();
 
-	// List of all reachable navigation polys.
-	LocalVector<gd::NavigationPoly> navigation_polys;
-	navigation_polys.reserve(polygons.size() * 0.75);
+	map_iteration.path_query_slots_semaphore.wait();
 
-	// Add the start polygon to the reachable navigation polygons.
-	gd::NavigationPoly begin_navigation_poly = gd::NavigationPoly(begin_poly);
-	begin_navigation_poly.self_id = 0;
-	begin_navigation_poly.entry = begin_point;
-	begin_navigation_poly.back_navigation_edge_pathway_start = begin_point;
-	begin_navigation_poly.back_navigation_edge_pathway_end = begin_point;
-	navigation_polys.push_back(begin_navigation_poly);
-
-	// List of polygon IDs to visit.
-	List<uint32_t> to_visit;
-	to_visit.push_back(0);
-
-	// This is an implementation of the A* algorithm.
-	int least_cost_id = 0;
-	int prev_least_cost_id = -1;
-	bool found_route = false;
-
-	const gd::Polygon *reachable_end = nullptr;
-	float reachable_d = 1e30;
-	bool is_reachable = true;
-
-	while (true) {
-		// Takes the current least_cost_poly neighbors (iterating over its edges) and compute the traveled_distance.
-		for (size_t i = 0; i < navigation_polys[least_cost_id].poly->edges.size(); i++) {
-			const gd::Edge &edge = navigation_polys[least_cost_id].poly->edges[i];
-
-			// Iterate over connections in this edge, then compute the new optimized travel distance assigned to this polygon.
-			for (int connection_index = 0; connection_index < edge.connections.size(); connection_index++) {
-				const gd::Edge::Connection &connection = edge.connections[connection_index];
-
-				// Only consider the connection to another polygon if this polygon is in a region with compatible layers.
-				if ((p_navigation_layers & connection.polygon->owner->get_navigation_layers()) == 0) {
-					continue;
-				}
-
-				const gd::NavigationPoly &least_cost_poly = navigation_polys[least_cost_id];
-				float poly_enter_cost = 0.0;
-				float poly_travel_cost = least_cost_poly.poly->owner->get_travel_cost();
-
-				if (prev_least_cost_id != -1 && (navigation_polys[prev_least_cost_id].poly->owner->get_self() != least_cost_poly.poly->owner->get_self())) {
-					poly_enter_cost = least_cost_poly.poly->owner->get_enter_cost();
-				}
-				prev_least_cost_id = least_cost_id;
-
-				Vector3 pathway[2] = { connection.pathway_start, connection.pathway_end };
-				const Vector3 new_entry = Geometry3D::get_closest_point_to_segment(least_cost_poly.entry, pathway);
-				const float new_distance = (least_cost_poly.entry.distance_to(new_entry) * poly_travel_cost) + poly_enter_cost + least_cost_poly.traveled_distance;
-
-				int64_t already_visited_polygon_index = navigation_polys.find(gd::NavigationPoly(connection.polygon));
-
-				if (already_visited_polygon_index != -1) {
-					// Polygon already visited, check if we can reduce the travel cost.
-					gd::NavigationPoly &avp = navigation_polys[already_visited_polygon_index];
-					if (new_distance < avp.traveled_distance) {
-						avp.back_navigation_poly_id = least_cost_id;
-						avp.back_navigation_edge = connection.edge;
-						avp.back_navigation_edge_pathway_start = connection.pathway_start;
-						avp.back_navigation_edge_pathway_end = connection.pathway_end;
-						avp.traveled_distance = new_distance;
-						avp.entry = new_entry;
-					}
-				} else {
-					// Add the neighbour polygon to the reachable ones.
-					gd::NavigationPoly new_navigation_poly = gd::NavigationPoly(connection.polygon);
-					new_navigation_poly.self_id = navigation_polys.size();
-					new_navigation_poly.back_navigation_poly_id = least_cost_id;
-					new_navigation_poly.back_navigation_edge = connection.edge;
-					new_navigation_poly.back_navigation_edge_pathway_start = connection.pathway_start;
-					new_navigation_poly.back_navigation_edge_pathway_end = connection.pathway_end;
-					new_navigation_poly.traveled_distance = new_distance;
-					new_navigation_poly.entry = new_entry;
-					navigation_polys.push_back(new_navigation_poly);
-
-					// Add the neighbour polygon to the polygons to visit.
-					to_visit.push_back(navigation_polys.size() - 1);
-				}
-			}
-		}
-
-		// Removes the least cost polygon from the list of polygons to visit so we can advance.
-		to_visit.erase(least_cost_id);
-
-		// When the list of polygons to visit is empty at this point it means the End Polygon is not reachable
-		if (to_visit.size() == 0) {
-			// Thus use the further reachable polygon
-			ERR_BREAK_MSG(is_reachable == false, "It's not expect to not find the most reachable polygons");
-			is_reachable = false;
-			if (reachable_end == nullptr) {
-				// The path is not found and there is not a way out.
-				break;
-			}
-
-			// Set as end point the furthest reachable point.
-			end_poly = reachable_end;
-			end_d = 1e20;
-			for (size_t point_id = 2; point_id < end_poly->points.size(); point_id++) {
-				Face3 f(end_poly->points[0].pos, end_poly->points[point_id - 1].pos, end_poly->points[point_id].pos);
-				Vector3 spoint = f.get_closest_point_to(p_destination);
-				float dpoint = spoint.distance_to(p_destination);
-				if (dpoint < end_d) {
-					end_point = spoint;
-					end_d = dpoint;
-				}
-			}
-
-			// Reset open and navigation_polys
-			gd::NavigationPoly np = navigation_polys[0];
-			navigation_polys.clear();
-			navigation_polys.push_back(np);
-			to_visit.clear();
-			to_visit.push_back(0);
-			least_cost_id = 0;
-			prev_least_cost_id = -1;
-
-			reachable_end = nullptr;
-
-			continue;
-		}
-
-		// Find the polygon with the minimum cost from the list of polygons to visit.
-		least_cost_id = -1;
-		float least_cost = 1e30;
-		for (List<uint32_t>::Element *element = to_visit.front(); element != nullptr; element = element->next()) {
-			gd::NavigationPoly *np = &navigation_polys[element->get()];
-			float cost = np->traveled_distance;
-			cost += (np->entry.distance_to(end_point) * np->poly->owner->get_travel_cost());
-			if (cost < least_cost) {
-				least_cost_id = np->self_id;
-				least_cost = cost;
-			}
-		}
-
-		ERR_BREAK(least_cost_id == -1);
-
-		// Stores the further reachable end polygon, in case our goal is not reachable.
-		if (is_reachable) {
-			float d = navigation_polys[least_cost_id].entry.distance_to(p_destination) * navigation_polys[least_cost_id].poly->owner->get_travel_cost();
-			if (reachable_d > d) {
-				reachable_d = d;
-				reachable_end = navigation_polys[least_cost_id].poly;
-			}
-		}
-
-		// Check if we reached the end
-		if (navigation_polys[least_cost_id].poly == end_poly) {
-			found_route = true;
+	map_iteration.path_query_slots_mutex.lock();
+	for (NavMeshQueries3D::PathQuerySlot &p_path_query_slot : map_iteration.path_query_slots) {
+		if (!p_path_query_slot.in_use) {
+			p_path_query_slot.in_use = true;
+			p_query_task.path_query_slot = &p_path_query_slot;
 			break;
 		}
 	}
+	map_iteration.path_query_slots_mutex.unlock();
 
-	// If we did not find a route, return an empty path.
-	if (!found_route) {
-		return Vector<Vector3>();
+	if (p_query_task.path_query_slot == nullptr) {
+		map_iteration.path_query_slots_semaphore.post();
+		ERR_FAIL_NULL_MSG(p_query_task.path_query_slot, "No unused NavMap path query slot found! This should never happen :(.");
 	}
 
-	Vector<Vector3> path;
-	// Optimize the path.
-	if (p_optimize) {
-		// Set the apex poly/point to the end point
-		gd::NavigationPoly *apex_poly = &navigation_polys[least_cost_id];
-		Vector3 apex_point = end_point;
+	p_query_task.map_up = map_iteration.map_up;
 
-		gd::NavigationPoly *left_poly = apex_poly;
-		Vector3 left_portal = apex_point;
-		gd::NavigationPoly *right_poly = apex_poly;
-		Vector3 right_portal = apex_point;
+	NavMeshQueries3D::query_task_map_iteration_get_path(p_query_task, map_iteration);
 
-		gd::NavigationPoly *p = apex_poly;
+	map_iteration.path_query_slots_mutex.lock();
+	uint32_t used_slot_index = p_query_task.path_query_slot->slot_index;
+	map_iteration.path_query_slots[used_slot_index].in_use = false;
+	p_query_task.path_query_slot = nullptr;
+	map_iteration.path_query_slots_mutex.unlock();
 
-		path.push_back(end_point);
-
-		while (p) {
-			// Set left and right points of the pathway between polygons.
-			Vector3 left = p->back_navigation_edge_pathway_start;
-			Vector3 right = p->back_navigation_edge_pathway_end;
-			if (THREE_POINTS_CROSS_PRODUCT(apex_point, left, right).dot(up) < 0) {
-				SWAP(left, right);
-			}
-
-			bool skip = false;
-			if (THREE_POINTS_CROSS_PRODUCT(apex_point, left_portal, left).dot(up) >= 0) {
-				//process
-				if (left_portal == apex_point || THREE_POINTS_CROSS_PRODUCT(apex_point, left, right_portal).dot(up) > 0) {
-					left_poly = p;
-					left_portal = left;
-				} else {
-					clip_path(navigation_polys, path, apex_poly, right_portal, right_poly);
-
-					apex_point = right_portal;
-					p = right_poly;
-					left_poly = p;
-					apex_poly = p;
-					left_portal = apex_point;
-					right_portal = apex_point;
-					path.push_back(apex_point);
-					skip = true;
-				}
-			}
-
-			if (!skip && THREE_POINTS_CROSS_PRODUCT(apex_point, right_portal, right).dot(up) <= 0) {
-				//process
-				if (right_portal == apex_point || THREE_POINTS_CROSS_PRODUCT(apex_point, right, left_portal).dot(up) < 0) {
-					right_poly = p;
-					right_portal = right;
-				} else {
-					clip_path(navigation_polys, path, apex_poly, left_portal, left_poly);
-
-					apex_point = left_portal;
-					p = left_poly;
-					right_poly = p;
-					apex_poly = p;
-					right_portal = apex_point;
-					left_portal = apex_point;
-					path.push_back(apex_point);
-				}
-			}
-
-			// Go to the previous polygon.
-			if (p->back_navigation_poly_id != -1) {
-				p = &navigation_polys[p->back_navigation_poly_id];
-			} else {
-				// The end
-				p = nullptr;
-			}
-		}
-
-		// If the last point is not the begin point, add it to the list.
-		if (path[path.size() - 1] != begin_point) {
-			path.push_back(begin_point);
-		}
-
-		path.reverse();
-
-	} else {
-		path.push_back(end_point);
-
-		// Add mid points
-		int np_id = least_cost_id;
-		while (np_id != -1 && navigation_polys[np_id].back_navigation_poly_id != -1) {
-			if (navigation_polys[np_id].back_navigation_edge != -1) {
-				int prev = navigation_polys[np_id].back_navigation_edge;
-				int prev_n = (navigation_polys[np_id].back_navigation_edge + 1) % navigation_polys[np_id].poly->points.size();
-				Vector3 point = (navigation_polys[np_id].poly->points[prev].pos + navigation_polys[np_id].poly->points[prev_n].pos) * 0.5;
-				path.push_back(point);
-			} else {
-				path.push_back(navigation_polys[np_id].entry);
-			}
-
-			np_id = navigation_polys[np_id].back_navigation_poly_id;
-		}
-
-		path.push_back(begin_point);
-		path.reverse();
-	}
-
-	return path;
+	map_iteration.path_query_slots_semaphore.post();
 }
 
 Vector3 NavMap::get_closest_point_to_segment(const Vector3 &p_from, const Vector3 &p_to, const bool p_use_collision) const {
-	bool use_collision = p_use_collision;
-	Vector3 closest_point;
-	real_t closest_point_d = 1e20;
-
-	for (size_t i(0); i < polygons.size(); i++) {
-		const gd::Polygon &p = polygons[i];
-
-		// For each face check the distance to the segment
-		for (size_t point_id = 2; point_id < p.points.size(); point_id += 1) {
-			const Face3 f(p.points[0].pos, p.points[point_id - 1].pos, p.points[point_id].pos);
-			Vector3 inters;
-			if (f.intersects_segment(p_from, p_to, &inters)) {
-				const real_t d = closest_point_d = p_from.distance_to(inters);
-				if (use_collision == false) {
-					closest_point = inters;
-					use_collision = true;
-					closest_point_d = d;
-				} else if (closest_point_d > d) {
-					closest_point = inters;
-					closest_point_d = d;
-				}
-			}
-		}
-
-		if (use_collision == false) {
-			for (size_t point_id = 0; point_id < p.points.size(); point_id += 1) {
-				Vector3 a, b;
-
-				Geometry3D::get_closest_points_between_segments(
-						p_from,
-						p_to,
-						p.points[point_id].pos,
-						p.points[(point_id + 1) % p.points.size()].pos,
-						a,
-						b);
-
-				const real_t d = a.distance_to(b);
-				if (d < closest_point_d) {
-					closest_point_d = d;
-					closest_point = b;
-				}
-			}
-		}
+	if (iteration_id == 0) {
+		NAVMAP_ITERATION_ZERO_ERROR_MSG();
+		return Vector3();
 	}
 
-	return closest_point;
+	GET_MAP_ITERATION_CONST();
+
+	return NavMeshQueries3D::map_iteration_get_closest_point_to_segment(map_iteration, p_from, p_to, p_use_collision);
 }
 
 Vector3 NavMap::get_closest_point(const Vector3 &p_point) const {
-	gd::ClosestPointQueryResult cp = get_closest_point_info(p_point);
-	return cp.point;
+	if (iteration_id == 0) {
+		NAVMAP_ITERATION_ZERO_ERROR_MSG();
+		return Vector3();
+	}
+
+	GET_MAP_ITERATION_CONST();
+
+	return NavMeshQueries3D::map_iteration_get_closest_point(map_iteration, p_point);
 }
 
 Vector3 NavMap::get_closest_point_normal(const Vector3 &p_point) const {
-	gd::ClosestPointQueryResult cp = get_closest_point_info(p_point);
-	return cp.normal;
+	if (iteration_id == 0) {
+		NAVMAP_ITERATION_ZERO_ERROR_MSG();
+		return Vector3();
+	}
+
+	GET_MAP_ITERATION_CONST();
+
+	return NavMeshQueries3D::map_iteration_get_closest_point_normal(map_iteration, p_point);
 }
 
 RID NavMap::get_closest_point_owner(const Vector3 &p_point) const {
-	gd::ClosestPointQueryResult cp = get_closest_point_info(p_point);
-	return cp.owner;
+	if (iteration_id == 0) {
+		NAVMAP_ITERATION_ZERO_ERROR_MSG();
+		return RID();
+	}
+
+	GET_MAP_ITERATION_CONST();
+
+	return NavMeshQueries3D::map_iteration_get_closest_point_owner(map_iteration, p_point);
 }
 
 gd::ClosestPointQueryResult NavMap::get_closest_point_info(const Vector3 &p_point) const {
-	gd::ClosestPointQueryResult result;
-	real_t closest_point_ds = 1e20;
+	GET_MAP_ITERATION_CONST();
 
-	for (size_t i(0); i < polygons.size(); i++) {
-		const gd::Polygon &p = polygons[i];
-
-		// For each face check the distance to the point
-		for (size_t point_id = 2; point_id < p.points.size(); point_id += 1) {
-			const Face3 f(p.points[0].pos, p.points[point_id - 1].pos, p.points[point_id].pos);
-			const Vector3 inters = f.get_closest_point_to(p_point);
-			const real_t ds = inters.distance_squared_to(p_point);
-			if (ds < closest_point_ds) {
-				result.point = inters;
-				result.normal = f.get_plane().normal;
-				result.owner = p.owner->get_self();
-				closest_point_ds = ds;
-			}
-		}
-	}
-
-	return result;
+	return NavMeshQueries3D::map_iteration_get_closest_point_info(map_iteration, p_point);
 }
 
 void NavMap::add_region(NavRegion *p_region) {
 	regions.push_back(p_region);
-	regenerate_links = true;
+	iteration_dirty = true;
 }
 
 void NavMap::remove_region(NavRegion *p_region) {
 	int64_t region_index = regions.find(p_region);
-	if (region_index != -1) {
+	if (region_index >= 0) {
 		regions.remove_at_unordered(region_index);
-		regenerate_links = true;
+		iteration_dirty = true;
 	}
 }
 
 void NavMap::add_link(NavLink *p_link) {
 	links.push_back(p_link);
-	regenerate_links = true;
+	iteration_dirty = true;
 }
 
 void NavMap::remove_link(NavLink *p_link) {
 	int64_t link_index = links.find(p_link);
-	if (link_index != -1) {
+	if (link_index >= 0) {
 		links.remove_at_unordered(link_index);
-		regenerate_links = true;
+		iteration_dirty = true;
 	}
 }
 
-bool NavMap::has_agent(RvoAgent *agent) const {
-	return (agents.find(agent) != -1);
+bool NavMap::has_agent(NavAgent *agent) const {
+	return agents.has(agent);
 }
 
-void NavMap::add_agent(RvoAgent *agent) {
+void NavMap::add_agent(NavAgent *agent) {
 	if (!has_agent(agent)) {
 		agents.push_back(agent);
 		agents_dirty = true;
 	}
 }
 
-void NavMap::remove_agent(RvoAgent *agent) {
+void NavMap::remove_agent(NavAgent *agent) {
 	remove_agent_as_controlled(agent);
 	int64_t agent_index = agents.find(agent);
-	if (agent_index != -1) {
+	if (agent_index >= 0) {
 		agents.remove_at_unordered(agent_index);
 		agents_dirty = true;
 	}
 }
 
-void NavMap::set_agent_as_controlled(RvoAgent *agent) {
-	const bool exist = (controlled_agents.find(agent) != -1);
-	if (!exist) {
-		ERR_FAIL_COND(!has_agent(agent));
-		controlled_agents.push_back(agent);
+bool NavMap::has_obstacle(NavObstacle *obstacle) const {
+	return obstacles.has(obstacle);
+}
+
+void NavMap::add_obstacle(NavObstacle *obstacle) {
+	if (obstacle->get_paused()) {
+		// No point in adding a paused obstacle, it will add itself when unpaused again.
+		return;
+	}
+
+	if (!has_obstacle(obstacle)) {
+		obstacles.push_back(obstacle);
+		obstacles_dirty = true;
 	}
 }
 
-void NavMap::remove_agent_as_controlled(RvoAgent *agent) {
-	int64_t active_avoidance_agent_index = controlled_agents.find(agent);
-	if (active_avoidance_agent_index != -1) {
-		controlled_agents.remove_at_unordered(active_avoidance_agent_index);
+void NavMap::remove_obstacle(NavObstacle *obstacle) {
+	int64_t obstacle_index = obstacles.find(obstacle);
+	if (obstacle_index >= 0) {
+		obstacles.remove_at_unordered(obstacle_index);
+		obstacles_dirty = true;
+	}
+}
+
+void NavMap::set_agent_as_controlled(NavAgent *agent) {
+	remove_agent_as_controlled(agent);
+
+	if (agent->get_paused()) {
+		// No point in adding a paused agent, it will add itself when unpaused again.
+		return;
+	}
+
+	if (agent->get_use_3d_avoidance()) {
+		int64_t agent_3d_index = active_3d_avoidance_agents.find(agent);
+		if (agent_3d_index < 0) {
+			active_3d_avoidance_agents.push_back(agent);
+			agents_dirty = true;
+		}
+	} else {
+		int64_t agent_2d_index = active_2d_avoidance_agents.find(agent);
+		if (agent_2d_index < 0) {
+			active_2d_avoidance_agents.push_back(agent);
+			agents_dirty = true;
+		}
+	}
+}
+
+void NavMap::remove_agent_as_controlled(NavAgent *agent) {
+	int64_t agent_3d_index = active_3d_avoidance_agents.find(agent);
+	if (agent_3d_index >= 0) {
+		active_3d_avoidance_agents.remove_at_unordered(agent_3d_index);
+		agents_dirty = true;
+	}
+	int64_t agent_2d_index = active_2d_avoidance_agents.find(agent);
+	if (agent_2d_index >= 0) {
+		active_2d_avoidance_agents.remove_at_unordered(agent_2d_index);
 		agents_dirty = true;
 	}
 }
 
+Vector3 NavMap::get_random_point(uint32_t p_navigation_layers, bool p_uniformly) const {
+	GET_MAP_ITERATION_CONST();
+
+	return NavMeshQueries3D::map_iteration_get_random_point(map_iteration, p_navigation_layers, p_uniformly);
+}
+
+void NavMap::_build_iteration() {
+	if (!iteration_dirty || iteration_building || iteration_ready) {
+		return;
+	}
+
+	// Get the next free iteration slot that should be potentially unused.
+	iteration_slot_rwlock.read_lock();
+	NavMapIteration &next_map_iteration = iteration_slots[(iteration_slot_index + 1) % 2];
+	// Check if the iteration slot is truly free or still used by an external thread.
+	bool iteration_is_free = next_map_iteration.users.get() == 0;
+	iteration_slot_rwlock.read_unlock();
+
+	if (!iteration_is_free) {
+		// A long running pathfinding thread or something is still reading
+		// from this older iteration and needs to finish first.
+		// Return and wait for the next sync cycle to check again.
+		return;
+	}
+
+	// Iteration slot is free and no longer used by anything, let's build.
+
+	iteration_dirty = false;
+	iteration_building = true;
+	iteration_ready = false;
+
+	// We don't need to hold any lock because at this point nothing else can touch it.
+	// All new queries are already forwarded to the other iteration slot.
+
+	iteration_build.reset();
+
+	iteration_build.merge_rasterizer_cell_size = get_merge_rasterizer_cell_size();
+	iteration_build.use_edge_connections = get_use_edge_connections();
+	iteration_build.edge_connection_margin = get_edge_connection_margin();
+	iteration_build.link_connection_radius = get_link_connection_radius();
+
+	uint32_t enabled_region_count = 0;
+	uint32_t enabled_link_count = 0;
+
+	for (NavRegion *region : regions) {
+		if (!region->get_enabled()) {
+			continue;
+		}
+		enabled_region_count++;
+	}
+	for (NavLink *link : links) {
+		if (!link->get_enabled()) {
+			continue;
+		}
+		enabled_link_count++;
+	}
+
+	next_map_iteration.region_ptr_to_region_id.clear();
+
+	next_map_iteration.region_iterations.clear();
+	next_map_iteration.link_iterations.clear();
+
+	next_map_iteration.region_iterations.resize(enabled_region_count);
+	next_map_iteration.link_iterations.resize(enabled_link_count);
+
+	uint32_t region_id_count = 0;
+	uint32_t link_id_count = 0;
+
+	for (NavRegion *region : regions) {
+		if (!region->get_enabled()) {
+			continue;
+		}
+		NavRegionIteration &region_iteration = next_map_iteration.region_iterations[region_id_count];
+		region_iteration.id = region_id_count++;
+		region->get_iteration_update(region_iteration);
+		next_map_iteration.region_ptr_to_region_id[region] = (uint32_t)region_iteration.id;
+	}
+	for (NavLink *link : links) {
+		if (!link->get_enabled()) {
+			continue;
+		}
+		NavLinkIteration &link_iteration = next_map_iteration.link_iterations[link_id_count];
+		link_iteration.id = link_id_count++;
+		link->get_iteration_update(link_iteration);
+	}
+
+	next_map_iteration.map_up = get_up();
+
+	iteration_build.map_iteration = &next_map_iteration;
+
+	if (use_async_iterations) {
+		iteration_build_thread_task_id = WorkerThreadPool::get_singleton()->add_native_task(&NavMap::_build_iteration_threaded, &iteration_build, true, SNAME("NavMapBuilder3D"));
+	} else {
+		NavMapBuilder3D::build_navmap_iteration(iteration_build);
+
+		iteration_building = false;
+		iteration_ready = true;
+	}
+}
+
+void NavMap::_build_iteration_threaded(void *p_arg) {
+	NavMapIterationBuild *_iteration_build = static_cast<NavMapIterationBuild *>(p_arg);
+
+	NavMapBuilder3D::build_navmap_iteration(*_iteration_build);
+}
+
+void NavMap::_sync_iteration() {
+	if (iteration_building || !iteration_ready) {
+		return;
+	}
+
+	performance_data.pm_polygon_count = iteration_build.performance_data.pm_polygon_count;
+	performance_data.pm_edge_count = iteration_build.performance_data.pm_edge_count;
+	performance_data.pm_edge_merge_count = iteration_build.performance_data.pm_edge_merge_count;
+	performance_data.pm_edge_connection_count = iteration_build.performance_data.pm_edge_connection_count;
+	performance_data.pm_edge_free_count = iteration_build.performance_data.pm_edge_free_count;
+
+	iteration_id = iteration_id % UINT32_MAX + 1;
+
+	// Finally ping-pong switch the iteration slot.
+	iteration_slot_rwlock.write_lock();
+	uint32_t next_iteration_slot_index = (iteration_slot_index + 1) % 2;
+	iteration_slot_index = next_iteration_slot_index;
+	iteration_slot_rwlock.write_unlock();
+
+	iteration_ready = false;
+}
+
 void NavMap::sync() {
-	// Check if we need to update the links.
-	if (regenerate_polygons) {
-		for (uint32_t r = 0; r < regions.size(); r++) {
-			regions[r]->scratch_polygons();
+	// Performance Monitor.
+	performance_data.pm_region_count = regions.size();
+	performance_data.pm_agent_count = agents.size();
+	performance_data.pm_link_count = links.size();
+	performance_data.pm_obstacle_count = obstacles.size();
+
+	_sync_dirty_map_update_requests();
+
+	if (iteration_dirty && !iteration_building && !iteration_ready) {
+		_build_iteration();
+	}
+	if (use_async_iterations && iteration_build_thread_task_id != WorkerThreadPool::INVALID_TASK_ID) {
+		if (WorkerThreadPool::get_singleton()->is_task_completed(iteration_build_thread_task_id)) {
+			WorkerThreadPool::get_singleton()->wait_for_task_completion(iteration_build_thread_task_id);
+
+			iteration_build_thread_task_id = WorkerThreadPool::INVALID_TASK_ID;
+			iteration_building = false;
+			iteration_ready = true;
 		}
-		regenerate_links = true;
+	}
+	if (iteration_ready) {
+		_sync_iteration();
 	}
 
-	for (uint32_t r = 0; r < regions.size(); r++) {
-		if (regions[r]->sync()) {
-			regenerate_links = true;
-		}
+	map_settings_dirty = false;
+
+	_sync_avoidance();
+}
+
+void NavMap::_sync_avoidance() {
+	_sync_dirty_avoidance_update_requests();
+
+	if (obstacles_dirty || agents_dirty) {
+		_update_rvo_simulation();
 	}
 
-	for (uint32_t l = 0; l < links.size(); l++) {
-		if (links[l]->check_dirty()) {
-			regenerate_links = true;
-		}
-	}
-
-	if (regenerate_links) {
-		// Remove regions connections.
-		for (uint32_t r = 0; r < regions.size(); r++) {
-			regions[r]->get_connections().clear();
-		}
-
-		// Resize the polygon count.
-		int count = 0;
-		for (uint32_t r = 0; r < regions.size(); r++) {
-			count += regions[r]->get_polygons().size();
-		}
-		polygons.resize(count);
-
-		// Copy all region polygons in the map.
-		count = 0;
-		for (uint32_t r = 0; r < regions.size(); r++) {
-			const LocalVector<gd::Polygon> &polygons_source = regions[r]->get_polygons();
-			for (uint32_t n = 0; n < polygons_source.size(); n++) {
-				polygons[count + n] = polygons_source[n];
-			}
-			count += regions[r]->get_polygons().size();
-		}
-
-		// Group all edges per key.
-		HashMap<gd::EdgeKey, Vector<gd::Edge::Connection>, gd::EdgeKey> connections;
-		for (uint32_t poly_id = 0; poly_id < polygons.size(); poly_id++) {
-			gd::Polygon &poly(polygons[poly_id]);
-
-			for (uint32_t p = 0; p < poly.points.size(); p++) {
-				int next_point = (p + 1) % poly.points.size();
-				gd::EdgeKey ek(poly.points[p].key, poly.points[next_point].key);
-
-				HashMap<gd::EdgeKey, Vector<gd::Edge::Connection>, gd::EdgeKey>::Iterator connection = connections.find(ek);
-				if (!connection) {
-					connections[ek] = Vector<gd::Edge::Connection>();
-				}
-				if (connections[ek].size() <= 1) {
-					// Add the polygon/edge tuple to this key.
-					gd::Edge::Connection new_connection;
-					new_connection.polygon = &poly;
-					new_connection.edge = p;
-					new_connection.pathway_start = poly.points[p].pos;
-					new_connection.pathway_end = poly.points[next_point].pos;
-					connections[ek].push_back(new_connection);
-				} else {
-					// The edge is already connected with another edge, skip.
-					ERR_PRINT_ONCE("Attempted to merge a navigation mesh triangle edge with another already-merged edge. This happens when the current `cell_size` is different from the one used to generate the navigation mesh. This will cause navigation problems.");
-				}
-			}
-		}
-
-		Vector<gd::Edge::Connection> free_edges;
-		for (KeyValue<gd::EdgeKey, Vector<gd::Edge::Connection>> &E : connections) {
-			if (E.value.size() == 2) {
-				// Connect edge that are shared in different polygons.
-				gd::Edge::Connection &c1 = E.value.write[0];
-				gd::Edge::Connection &c2 = E.value.write[1];
-				c1.polygon->edges[c1.edge].connections.push_back(c2);
-				c2.polygon->edges[c2.edge].connections.push_back(c1);
-				// Note: The pathway_start/end are full for those connection and do not need to be modified.
-			} else {
-				CRASH_COND_MSG(E.value.size() != 1, vformat("Number of connection != 1. Found: %d", E.value.size()));
-				free_edges.push_back(E.value[0]);
-			}
-		}
-
-		// Find the compatible near edges.
-		//
-		// Note:
-		// Considering that the edges must be compatible (for obvious reasons)
-		// to be connected, create new polygons to remove that small gap is
-		// not really useful and would result in wasteful computation during
-		// connection, integration and path finding.
-		for (int i = 0; i < free_edges.size(); i++) {
-			const gd::Edge::Connection &free_edge = free_edges[i];
-			Vector3 edge_p1 = free_edge.polygon->points[free_edge.edge].pos;
-			Vector3 edge_p2 = free_edge.polygon->points[(free_edge.edge + 1) % free_edge.polygon->points.size()].pos;
-
-			for (int j = 0; j < free_edges.size(); j++) {
-				const gd::Edge::Connection &other_edge = free_edges[j];
-				if (i == j || free_edge.polygon->owner == other_edge.polygon->owner) {
-					continue;
-				}
-
-				Vector3 other_edge_p1 = other_edge.polygon->points[other_edge.edge].pos;
-				Vector3 other_edge_p2 = other_edge.polygon->points[(other_edge.edge + 1) % other_edge.polygon->points.size()].pos;
-
-				// Compute the projection of the opposite edge on the current one
-				Vector3 edge_vector = edge_p2 - edge_p1;
-				float projected_p1_ratio = edge_vector.dot(other_edge_p1 - edge_p1) / (edge_vector.length_squared());
-				float projected_p2_ratio = edge_vector.dot(other_edge_p2 - edge_p1) / (edge_vector.length_squared());
-				if ((projected_p1_ratio < 0.0 && projected_p2_ratio < 0.0) || (projected_p1_ratio > 1.0 && projected_p2_ratio > 1.0)) {
-					continue;
-				}
-
-				// Check if the two edges are close to each other enough and compute a pathway between the two regions.
-				Vector3 self1 = edge_vector * CLAMP(projected_p1_ratio, 0.0, 1.0) + edge_p1;
-				Vector3 other1;
-				if (projected_p1_ratio >= 0.0 && projected_p1_ratio <= 1.0) {
-					other1 = other_edge_p1;
-				} else {
-					other1 = other_edge_p1.lerp(other_edge_p2, (1.0 - projected_p1_ratio) / (projected_p2_ratio - projected_p1_ratio));
-				}
-				if (other1.distance_to(self1) > edge_connection_margin) {
-					continue;
-				}
-
-				Vector3 self2 = edge_vector * CLAMP(projected_p2_ratio, 0.0, 1.0) + edge_p1;
-				Vector3 other2;
-				if (projected_p2_ratio >= 0.0 && projected_p2_ratio <= 1.0) {
-					other2 = other_edge_p2;
-				} else {
-					other2 = other_edge_p1.lerp(other_edge_p2, (0.0 - projected_p1_ratio) / (projected_p2_ratio - projected_p1_ratio));
-				}
-				if (other2.distance_to(self2) > edge_connection_margin) {
-					continue;
-				}
-
-				// The edges can now be connected.
-				gd::Edge::Connection new_connection = other_edge;
-				new_connection.pathway_start = (self1 + other1) / 2.0;
-				new_connection.pathway_end = (self2 + other2) / 2.0;
-				free_edge.polygon->edges[free_edge.edge].connections.push_back(new_connection);
-
-				// Add the connection to the region_connection map.
-				((NavRegion *)free_edge.polygon->owner)->get_connections().push_back(new_connection);
-			}
-		}
-
-		uint32_t link_poly_idx = 0;
-		link_polygons.resize(links.size());
-
-		// Search for polygons within range of a nav link.
-		for (uint32_t l = 0; l < links.size(); l++) {
-			const NavLink *link = links[l];
-			const Vector3 start = link->get_start_location();
-			const Vector3 end = link->get_end_location();
-
-			gd::Polygon *closest_start_polygon = nullptr;
-			real_t closest_start_distance = link_connection_radius;
-			Vector3 closest_start_point;
-
-			gd::Polygon *closest_end_polygon = nullptr;
-			real_t closest_end_distance = link_connection_radius;
-			Vector3 closest_end_point;
-
-			// Create link to any polygons within the search radius of the start point.
-			for (uint32_t start_index = 0; start_index < polygons.size(); start_index++) {
-				gd::Polygon &start_poly = polygons[start_index];
-
-				// For each face check the distance to the start
-				for (uint32_t start_point_id = 2; start_point_id < start_poly.points.size(); start_point_id += 1) {
-					const Face3 start_face(start_poly.points[0].pos, start_poly.points[start_point_id - 1].pos, start_poly.points[start_point_id].pos);
-					const Vector3 start_point = start_face.get_closest_point_to(start);
-					const real_t start_distance = start_point.distance_to(start);
-
-					// Pick the polygon that is within our radius and is closer than anything we've seen yet.
-					if (start_distance <= link_connection_radius && start_distance < closest_start_distance) {
-						closest_start_distance = start_distance;
-						closest_start_point = start_point;
-						closest_start_polygon = &start_poly;
-					}
-				}
-			}
-
-			// Find any polygons within the search radius of the end point.
-			for (uint32_t end_index = 0; end_index < polygons.size(); end_index++) {
-				gd::Polygon &end_poly = polygons[end_index];
-
-				// For each face check the distance to the end
-				for (uint32_t end_point_id = 2; end_point_id < end_poly.points.size(); end_point_id += 1) {
-					const Face3 end_face(end_poly.points[0].pos, end_poly.points[end_point_id - 1].pos, end_poly.points[end_point_id].pos);
-					const Vector3 end_point = end_face.get_closest_point_to(end);
-					const real_t end_distance = end_point.distance_to(end);
-
-					// Pick the polygon that is within our radius and is closer than anything we've seen yet.
-					if (end_distance <= link_connection_radius && end_distance < closest_end_distance) {
-						closest_end_distance = end_distance;
-						closest_end_point = end_point;
-						closest_end_polygon = &end_poly;
-					}
-				}
-			}
-
-			// If we have both a start and end point, then create a synthetic polygon to route through.
-			if (closest_start_polygon && closest_end_polygon) {
-				gd::Polygon &new_polygon = link_polygons[link_poly_idx++];
-				new_polygon.owner = link;
-
-				new_polygon.edges.clear();
-				new_polygon.edges.resize(4);
-				new_polygon.points.clear();
-				new_polygon.points.reserve(4);
-
-				// Build a set of vertices that create a thin polygon going from the start to the end point.
-				new_polygon.points.push_back({ closest_start_point, get_point_key(closest_start_point) });
-				new_polygon.points.push_back({ closest_start_point, get_point_key(closest_start_point) });
-				new_polygon.points.push_back({ closest_end_point, get_point_key(closest_end_point) });
-				new_polygon.points.push_back({ closest_end_point, get_point_key(closest_end_point) });
-
-				Vector3 center;
-				for (int p = 0; p < 4; ++p) {
-					center += new_polygon.points[p].pos;
-				}
-				new_polygon.center = center / real_t(new_polygon.points.size());
-				new_polygon.clockwise = true;
-
-				// Setup connections to go forward in the link.
-				{
-					gd::Edge::Connection entry_connection;
-					entry_connection.polygon = &new_polygon;
-					entry_connection.edge = -1;
-					entry_connection.pathway_start = new_polygon.points[0].pos;
-					entry_connection.pathway_end = new_polygon.points[1].pos;
-					closest_start_polygon->edges[0].connections.push_back(entry_connection);
-
-					gd::Edge::Connection exit_connection;
-					exit_connection.polygon = closest_end_polygon;
-					exit_connection.edge = -1;
-					exit_connection.pathway_start = new_polygon.points[2].pos;
-					exit_connection.pathway_end = new_polygon.points[3].pos;
-					new_polygon.edges[2].connections.push_back(exit_connection);
-				}
-
-				// If the link is bi-directional, create connections from the end to the start.
-				if (link->is_bidirectional()) {
-					gd::Edge::Connection entry_connection;
-					entry_connection.polygon = &new_polygon;
-					entry_connection.edge = -1;
-					entry_connection.pathway_start = new_polygon.points[2].pos;
-					entry_connection.pathway_end = new_polygon.points[3].pos;
-					closest_end_polygon->edges[0].connections.push_back(entry_connection);
-
-					gd::Edge::Connection exit_connection;
-					exit_connection.polygon = closest_start_polygon;
-					exit_connection.edge = -1;
-					exit_connection.pathway_start = new_polygon.points[0].pos;
-					exit_connection.pathway_end = new_polygon.points[1].pos;
-					new_polygon.edges[0].connections.push_back(exit_connection);
-				}
-			}
-		}
-
-		// Update the update ID.
-		map_update_id = (map_update_id + 1) % 9999999;
-	}
-
-	// Update agents tree.
-	if (agents_dirty) {
-		// cannot use LocalVector here as RVO library expects std::vector to build KdTree
-		std::vector<RVO::Agent *> raw_agents;
-		raw_agents.reserve(agents.size());
-		for (size_t i(0); i < agents.size(); i++) {
-			raw_agents.push_back(agents[i]->get_agent());
-		}
-		rvo.buildAgentTree(raw_agents);
-	}
-
-	regenerate_polygons = false;
-	regenerate_links = false;
+	obstacles_dirty = false;
 	agents_dirty = false;
 }
 
-void NavMap::compute_single_step(uint32_t index, RvoAgent **agent) {
-	(*(agent + index))->get_agent()->computeNeighbors(&rvo);
-	(*(agent + index))->get_agent()->computeNewVelocity(deltatime);
+void NavMap::_update_rvo_obstacles_tree_2d() {
+	int obstacle_vertex_count = 0;
+	for (NavObstacle *obstacle : obstacles) {
+		obstacle_vertex_count += obstacle->get_vertices().size();
+	}
+
+	// Cleaning old obstacles.
+	for (size_t i = 0; i < rvo_simulation_2d.obstacles_.size(); ++i) {
+		delete rvo_simulation_2d.obstacles_[i];
+	}
+	rvo_simulation_2d.obstacles_.clear();
+
+	// Cannot use LocalVector here as RVO library expects std::vector to build KdTree
+	std::vector<RVO2D::Obstacle2D *> &raw_obstacles = rvo_simulation_2d.obstacles_;
+	raw_obstacles.reserve(obstacle_vertex_count);
+
+	// The following block is modified copy from RVO2D::AddObstacle()
+	// Obstacles are linked and depend on all other obstacles.
+	for (NavObstacle *obstacle : obstacles) {
+		const Vector3 &_obstacle_position = obstacle->get_position();
+		const Vector<Vector3> &_obstacle_vertices = obstacle->get_vertices();
+
+		if (_obstacle_vertices.size() < 2) {
+			continue;
+		}
+
+		std::vector<RVO2D::Vector2> rvo_2d_vertices;
+		rvo_2d_vertices.reserve(_obstacle_vertices.size());
+
+		uint32_t _obstacle_avoidance_layers = obstacle->get_avoidance_layers();
+		real_t _obstacle_height = obstacle->get_height();
+
+		for (const Vector3 &_obstacle_vertex : _obstacle_vertices) {
+#ifdef TOOLS_ENABLED
+			if (_obstacle_vertex.y != 0) {
+				WARN_PRINT_ONCE("Y coordinates of static obstacle vertices are ignored. Please use obstacle position Y to change elevation of obstacle.");
+			}
+#endif
+			rvo_2d_vertices.push_back(RVO2D::Vector2(_obstacle_vertex.x + _obstacle_position.x, _obstacle_vertex.z + _obstacle_position.z));
+		}
+
+		const size_t obstacleNo = raw_obstacles.size();
+
+		for (size_t i = 0; i < rvo_2d_vertices.size(); i++) {
+			RVO2D::Obstacle2D *rvo_2d_obstacle = new RVO2D::Obstacle2D();
+			rvo_2d_obstacle->point_ = rvo_2d_vertices[i];
+			rvo_2d_obstacle->height_ = _obstacle_height;
+			rvo_2d_obstacle->elevation_ = _obstacle_position.y;
+
+			rvo_2d_obstacle->avoidance_layers_ = _obstacle_avoidance_layers;
+
+			if (i != 0) {
+				rvo_2d_obstacle->prevObstacle_ = raw_obstacles.back();
+				rvo_2d_obstacle->prevObstacle_->nextObstacle_ = rvo_2d_obstacle;
+			}
+
+			if (i == rvo_2d_vertices.size() - 1) {
+				rvo_2d_obstacle->nextObstacle_ = raw_obstacles[obstacleNo];
+				rvo_2d_obstacle->nextObstacle_->prevObstacle_ = rvo_2d_obstacle;
+			}
+
+			rvo_2d_obstacle->unitDir_ = normalize(rvo_2d_vertices[(i == rvo_2d_vertices.size() - 1 ? 0 : i + 1)] - rvo_2d_vertices[i]);
+
+			if (rvo_2d_vertices.size() == 2) {
+				rvo_2d_obstacle->isConvex_ = true;
+			} else {
+				rvo_2d_obstacle->isConvex_ = (leftOf(rvo_2d_vertices[(i == 0 ? rvo_2d_vertices.size() - 1 : i - 1)], rvo_2d_vertices[i], rvo_2d_vertices[(i == rvo_2d_vertices.size() - 1 ? 0 : i + 1)]) >= 0.0f);
+			}
+
+			rvo_2d_obstacle->id_ = raw_obstacles.size();
+
+			raw_obstacles.push_back(rvo_2d_obstacle);
+		}
+	}
+
+	rvo_simulation_2d.kdTree_->buildObstacleTree(raw_obstacles);
+}
+
+void NavMap::_update_rvo_agents_tree_2d() {
+	// Cannot use LocalVector here as RVO library expects std::vector to build KdTree.
+	std::vector<RVO2D::Agent2D *> raw_agents;
+	raw_agents.reserve(active_2d_avoidance_agents.size());
+	for (NavAgent *agent : active_2d_avoidance_agents) {
+		raw_agents.push_back(agent->get_rvo_agent_2d());
+	}
+	rvo_simulation_2d.kdTree_->buildAgentTree(raw_agents);
+}
+
+void NavMap::_update_rvo_agents_tree_3d() {
+	// Cannot use LocalVector here as RVO library expects std::vector to build KdTree.
+	std::vector<RVO3D::Agent3D *> raw_agents;
+	raw_agents.reserve(active_3d_avoidance_agents.size());
+	for (NavAgent *agent : active_3d_avoidance_agents) {
+		raw_agents.push_back(agent->get_rvo_agent_3d());
+	}
+	rvo_simulation_3d.kdTree_->buildAgentTree(raw_agents);
+}
+
+void NavMap::_update_rvo_simulation() {
+	if (obstacles_dirty) {
+		_update_rvo_obstacles_tree_2d();
+	}
+	if (agents_dirty) {
+		_update_rvo_agents_tree_2d();
+		_update_rvo_agents_tree_3d();
+	}
+}
+
+void NavMap::compute_single_avoidance_step_2d(uint32_t index, NavAgent **agent) {
+	(*(agent + index))->get_rvo_agent_2d()->computeNeighbors(&rvo_simulation_2d);
+	(*(agent + index))->get_rvo_agent_2d()->computeNewVelocity(&rvo_simulation_2d);
+	(*(agent + index))->get_rvo_agent_2d()->update(&rvo_simulation_2d);
+	(*(agent + index))->update();
+}
+
+void NavMap::compute_single_avoidance_step_3d(uint32_t index, NavAgent **agent) {
+	(*(agent + index))->get_rvo_agent_3d()->computeNeighbors(&rvo_simulation_3d);
+	(*(agent + index))->get_rvo_agent_3d()->computeNewVelocity(&rvo_simulation_3d);
+	(*(agent + index))->get_rvo_agent_3d()->update(&rvo_simulation_3d);
+	(*(agent + index))->update();
 }
 
 void NavMap::step(real_t p_deltatime) {
 	deltatime = p_deltatime;
-	if (controlled_agents.size() > 0) {
-		WorkerThreadPool::GroupID group_task = WorkerThreadPool::get_singleton()->add_template_group_task(this, &NavMap::compute_single_step, controlled_agents.ptr(), controlled_agents.size(), -1, true, SNAME("NavigationMapAgents"));
-		WorkerThreadPool::get_singleton()->wait_for_group_task_completion(group_task);
+
+	rvo_simulation_2d.setTimeStep(float(deltatime));
+	rvo_simulation_3d.setTimeStep(float(deltatime));
+
+	if (active_2d_avoidance_agents.size() > 0) {
+		if (use_threads && avoidance_use_multiple_threads) {
+			WorkerThreadPool::GroupID group_task = WorkerThreadPool::get_singleton()->add_template_group_task(this, &NavMap::compute_single_avoidance_step_2d, active_2d_avoidance_agents.ptr(), active_2d_avoidance_agents.size(), -1, true, SNAME("RVOAvoidanceAgents2D"));
+			WorkerThreadPool::get_singleton()->wait_for_group_task_completion(group_task);
+		} else {
+			for (NavAgent *agent : active_2d_avoidance_agents) {
+				agent->get_rvo_agent_2d()->computeNeighbors(&rvo_simulation_2d);
+				agent->get_rvo_agent_2d()->computeNewVelocity(&rvo_simulation_2d);
+				agent->get_rvo_agent_2d()->update(&rvo_simulation_2d);
+				agent->update();
+			}
+		}
 	}
-}
 
-void NavMap::dispatch_callbacks() {
-	for (int i(0); i < static_cast<int>(controlled_agents.size()); i++) {
-		controlled_agents[i]->dispatch_callback();
-	}
-}
-
-void NavMap::clip_path(const LocalVector<gd::NavigationPoly> &p_navigation_polys, Vector<Vector3> &path, const gd::NavigationPoly *from_poly, const Vector3 &p_to_point, const gd::NavigationPoly *p_to_poly) const {
-	Vector3 from = path[path.size() - 1];
-
-	if (from.is_equal_approx(p_to_point)) {
-		return;
-	}
-	Plane cut_plane;
-	cut_plane.normal = (from - p_to_point).cross(up);
-	if (cut_plane.normal == Vector3()) {
-		return;
-	}
-	cut_plane.normal.normalize();
-	cut_plane.d = cut_plane.normal.dot(from);
-
-	while (from_poly != p_to_poly) {
-		Vector3 pathway_start = from_poly->back_navigation_edge_pathway_start;
-		Vector3 pathway_end = from_poly->back_navigation_edge_pathway_end;
-
-		ERR_FAIL_COND(from_poly->back_navigation_poly_id == -1);
-		from_poly = &p_navigation_polys[from_poly->back_navigation_poly_id];
-
-		if (!pathway_start.is_equal_approx(pathway_end)) {
-			Vector3 inters;
-			if (cut_plane.intersects_segment(pathway_start, pathway_end, &inters)) {
-				if (!inters.is_equal_approx(p_to_point) && !inters.is_equal_approx(path[path.size() - 1])) {
-					path.push_back(inters);
-				}
+	if (active_3d_avoidance_agents.size() > 0) {
+		if (use_threads && avoidance_use_multiple_threads) {
+			WorkerThreadPool::GroupID group_task = WorkerThreadPool::get_singleton()->add_template_group_task(this, &NavMap::compute_single_avoidance_step_3d, active_3d_avoidance_agents.ptr(), active_3d_avoidance_agents.size(), -1, true, SNAME("RVOAvoidanceAgents3D"));
+			WorkerThreadPool::get_singleton()->wait_for_group_task_completion(group_task);
+		} else {
+			for (NavAgent *agent : active_3d_avoidance_agents) {
+				agent->get_rvo_agent_3d()->computeNeighbors(&rvo_simulation_3d);
+				agent->get_rvo_agent_3d()->computeNewVelocity(&rvo_simulation_3d);
+				agent->get_rvo_agent_3d()->update(&rvo_simulation_3d);
+				agent->update();
 			}
 		}
 	}
 }
 
+void NavMap::dispatch_callbacks() {
+	for (NavAgent *agent : active_2d_avoidance_agents) {
+		agent->dispatch_avoidance_callback();
+	}
+
+	for (NavAgent *agent : active_3d_avoidance_agents) {
+		agent->dispatch_avoidance_callback();
+	}
+}
+
+void NavMap::_update_merge_rasterizer_cell_dimensions() {
+	merge_rasterizer_cell_size.x = cell_size * merge_rasterizer_cell_scale;
+	merge_rasterizer_cell_size.y = cell_height * merge_rasterizer_cell_scale;
+	merge_rasterizer_cell_size.z = cell_size * merge_rasterizer_cell_scale;
+}
+
+int NavMap::get_region_connections_count(NavRegion *p_region) const {
+	ERR_FAIL_NULL_V(p_region, 0);
+
+	GET_MAP_ITERATION_CONST();
+
+	HashMap<NavRegion *, uint32_t>::ConstIterator found_id = map_iteration.region_ptr_to_region_id.find(p_region);
+	if (found_id) {
+		HashMap<uint32_t, LocalVector<gd::Edge::Connection>>::ConstIterator found_connections = map_iteration.external_region_connections.find(found_id->value);
+		if (found_connections) {
+			return found_connections->value.size();
+		}
+	}
+
+	return 0;
+}
+
+Vector3 NavMap::get_region_connection_pathway_start(NavRegion *p_region, int p_connection_id) const {
+	ERR_FAIL_NULL_V(p_region, Vector3());
+
+	GET_MAP_ITERATION_CONST();
+
+	HashMap<NavRegion *, uint32_t>::ConstIterator found_id = map_iteration.region_ptr_to_region_id.find(p_region);
+	if (found_id) {
+		HashMap<uint32_t, LocalVector<gd::Edge::Connection>>::ConstIterator found_connections = map_iteration.external_region_connections.find(found_id->value);
+		if (found_connections) {
+			ERR_FAIL_INDEX_V(p_connection_id, int(found_connections->value.size()), Vector3());
+			return found_connections->value[p_connection_id].pathway_start;
+		}
+	}
+
+	return Vector3();
+}
+
+Vector3 NavMap::get_region_connection_pathway_end(NavRegion *p_region, int p_connection_id) const {
+	ERR_FAIL_NULL_V(p_region, Vector3());
+
+	GET_MAP_ITERATION_CONST();
+
+	HashMap<NavRegion *, uint32_t>::ConstIterator found_id = map_iteration.region_ptr_to_region_id.find(p_region);
+	if (found_id) {
+		HashMap<uint32_t, LocalVector<gd::Edge::Connection>>::ConstIterator found_connections = map_iteration.external_region_connections.find(found_id->value);
+		if (found_connections) {
+			ERR_FAIL_INDEX_V(p_connection_id, int(found_connections->value.size()), Vector3());
+			return found_connections->value[p_connection_id].pathway_end;
+		}
+	}
+
+	return Vector3();
+}
+
+void NavMap::add_region_sync_dirty_request(SelfList<NavRegion> *p_sync_request) {
+	if (p_sync_request->in_list()) {
+		return;
+	}
+	sync_dirty_requests.regions.add(p_sync_request);
+}
+
+void NavMap::add_link_sync_dirty_request(SelfList<NavLink> *p_sync_request) {
+	if (p_sync_request->in_list()) {
+		return;
+	}
+	sync_dirty_requests.links.add(p_sync_request);
+}
+
+void NavMap::add_agent_sync_dirty_request(SelfList<NavAgent> *p_sync_request) {
+	if (p_sync_request->in_list()) {
+		return;
+	}
+	sync_dirty_requests.agents.add(p_sync_request);
+}
+
+void NavMap::add_obstacle_sync_dirty_request(SelfList<NavObstacle> *p_sync_request) {
+	if (p_sync_request->in_list()) {
+		return;
+	}
+	sync_dirty_requests.obstacles.add(p_sync_request);
+}
+
+void NavMap::remove_region_sync_dirty_request(SelfList<NavRegion> *p_sync_request) {
+	if (!p_sync_request->in_list()) {
+		return;
+	}
+	sync_dirty_requests.regions.remove(p_sync_request);
+}
+
+void NavMap::remove_link_sync_dirty_request(SelfList<NavLink> *p_sync_request) {
+	if (!p_sync_request->in_list()) {
+		return;
+	}
+	sync_dirty_requests.links.remove(p_sync_request);
+}
+
+void NavMap::remove_agent_sync_dirty_request(SelfList<NavAgent> *p_sync_request) {
+	if (!p_sync_request->in_list()) {
+		return;
+	}
+	sync_dirty_requests.agents.remove(p_sync_request);
+}
+
+void NavMap::remove_obstacle_sync_dirty_request(SelfList<NavObstacle> *p_sync_request) {
+	if (!p_sync_request->in_list()) {
+		return;
+	}
+	sync_dirty_requests.obstacles.remove(p_sync_request);
+}
+
+void NavMap::_sync_dirty_map_update_requests() {
+	// If entire map settings changed make all regions dirty.
+	if (map_settings_dirty) {
+		for (NavRegion *region : regions) {
+			region->scratch_polygons();
+		}
+		iteration_dirty = true;
+	}
+
+	if (!iteration_dirty) {
+		iteration_dirty = sync_dirty_requests.regions.first() || sync_dirty_requests.links.first();
+	}
+
+	// Sync NavRegions.
+	for (SelfList<NavRegion> *element = sync_dirty_requests.regions.first(); element; element = element->next()) {
+		element->self()->sync();
+	}
+	sync_dirty_requests.regions.clear();
+
+	// Sync NavLinks.
+	for (SelfList<NavLink> *element = sync_dirty_requests.links.first(); element; element = element->next()) {
+		element->self()->sync();
+	}
+	sync_dirty_requests.links.clear();
+}
+
+void NavMap::_sync_dirty_avoidance_update_requests() {
+	// Sync NavAgents.
+	if (!agents_dirty) {
+		agents_dirty = sync_dirty_requests.agents.first();
+	}
+	for (SelfList<NavAgent> *element = sync_dirty_requests.agents.first(); element; element = element->next()) {
+		element->self()->sync();
+	}
+	sync_dirty_requests.agents.clear();
+
+	// Sync NavObstacles.
+	if (!obstacles_dirty) {
+		obstacles_dirty = sync_dirty_requests.obstacles.first();
+	}
+	for (SelfList<NavObstacle> *element = sync_dirty_requests.obstacles.first(); element; element = element->next()) {
+		element->self()->sync();
+	}
+	sync_dirty_requests.obstacles.clear();
+}
+
+void NavMap::set_use_async_iterations(bool p_enabled) {
+	if (use_async_iterations == p_enabled) {
+		return;
+	}
+#ifdef THREADS_ENABLED
+	use_async_iterations = p_enabled;
+#endif
+}
+
+bool NavMap::get_use_async_iterations() const {
+	return use_async_iterations;
+}
+
 NavMap::NavMap() {
+	avoidance_use_multiple_threads = GLOBAL_GET("navigation/avoidance/thread_model/avoidance_use_multiple_threads");
+	avoidance_use_high_priority_threads = GLOBAL_GET("navigation/avoidance/thread_model/avoidance_use_high_priority_threads");
+
+	path_query_slots_max = GLOBAL_GET("navigation/pathfinding/max_threads");
+
+	int processor_count = OS::get_singleton()->get_processor_count();
+	if (path_query_slots_max < 0) {
+		path_query_slots_max = processor_count;
+	}
+	if (processor_count < path_query_slots_max) {
+		path_query_slots_max = processor_count;
+	}
+	if (path_query_slots_max < 1) {
+		path_query_slots_max = 1;
+	}
+
+	iteration_slots.resize(2);
+
+	for (NavMapIteration &iteration_slot : iteration_slots) {
+		iteration_slot.path_query_slots.resize(path_query_slots_max);
+		for (uint32_t i = 0; i < iteration_slot.path_query_slots.size(); i++) {
+			iteration_slot.path_query_slots[i].slot_index = i;
+		}
+		iteration_slot.path_query_slots_semaphore.post(path_query_slots_max);
+	}
+
+#ifdef THREADS_ENABLED
+	use_async_iterations = GLOBAL_GET("navigation/world/map_use_async_iterations");
+#else
+	use_async_iterations = false;
+#endif
 }
 
 NavMap::~NavMap() {
+	if (iteration_build_thread_task_id != WorkerThreadPool::INVALID_TASK_ID) {
+		WorkerThreadPool::get_singleton()->wait_for_task_completion(iteration_build_thread_task_id);
+		iteration_build_thread_task_id = WorkerThreadPool::INVALID_TASK_ID;
+	}
 }

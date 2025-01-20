@@ -1,32 +1,32 @@
-/*************************************************************************/
-/*  string_name.h                                                        */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  string_name.h                                                         */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #ifndef STRING_NAME_H
 #define STRING_NAME_H
@@ -60,6 +60,11 @@ class StringName {
 		uint32_t debug_references = 0;
 #endif
 		String get_name() const { return cname ? String(cname) : name; }
+		bool operator==(const String &p_name) const;
+		bool operator!=(const String &p_name) const;
+		bool operator==(const char *p_name) const;
+		bool operator!=(const char *p_name) const;
+
 		int idx = 0;
 		uint32_t hash = 0;
 		_Data *prev = nullptr;
@@ -67,23 +72,19 @@ class StringName {
 		_Data() {}
 	};
 
-	static _Data *_table[STRING_TABLE_LEN];
+	static inline _Data *_table[STRING_TABLE_LEN];
 
 	_Data *_data = nullptr;
-
-	union _HashUnion {
-		_Data *ptr = nullptr;
-		uint32_t hash;
-	};
 
 	void unref();
 	friend void register_core_types();
 	friend void unregister_core_types();
 	friend class Main;
-	static Mutex mutex;
+	static inline Mutex mutex;
 	static void setup();
 	static void cleanup();
-	static bool configured;
+	static uint32_t get_empty_hash();
+	static inline bool configured = false;
 #ifdef DEBUG_ENABLED
 	struct DebugSortReferences {
 		bool operator()(const _Data *p_left, const _Data *p_right) const {
@@ -91,7 +92,7 @@ class StringName {
 		}
 	};
 
-	static bool debug_stringname;
+	static inline bool debug_stringname = false;
 #endif
 
 	StringName(_Data *p_data) { _data = p_data; }
@@ -102,6 +103,11 @@ public:
 	bool operator==(const String &p_name) const;
 	bool operator==(const char *p_name) const;
 	bool operator!=(const String &p_name) const;
+	bool operator!=(const char *p_name) const;
+
+	char32_t operator[](int p_index) const;
+	int length() const;
+	bool is_empty() const;
 
 	_FORCE_INLINE_ bool is_node_unique_name() const {
 		if (!_data) {
@@ -116,22 +122,33 @@ public:
 	_FORCE_INLINE_ bool operator<(const StringName &p_name) const {
 		return _data < p_name._data;
 	}
+	_FORCE_INLINE_ bool operator<=(const StringName &p_name) const {
+		return _data <= p_name._data;
+	}
+	_FORCE_INLINE_ bool operator>(const StringName &p_name) const {
+		return _data > p_name._data;
+	}
+	_FORCE_INLINE_ bool operator>=(const StringName &p_name) const {
+		return _data >= p_name._data;
+	}
 	_FORCE_INLINE_ bool operator==(const StringName &p_name) const {
-		// the real magic of all this mess happens here.
-		// this is why path comparisons are very fast
+		// The real magic of all this mess happens here.
+		// This is why path comparisons are very fast.
 		return _data == p_name._data;
+	}
+	_FORCE_INLINE_ bool operator!=(const StringName &p_name) const {
+		return _data != p_name._data;
 	}
 	_FORCE_INLINE_ uint32_t hash() const {
 		if (_data) {
 			return _data->hash;
 		} else {
-			return 0;
+			return get_empty_hash();
 		}
 	}
 	_FORCE_INLINE_ const void *data_unique_pointer() const {
 		return (void *)_data;
 	}
-	bool operator!=(const StringName &p_name) const;
 
 	_FORCE_INLINE_ operator String() const {
 		if (_data) {
@@ -170,12 +187,28 @@ public:
 		}
 	};
 
-	void operator=(const StringName &p_name);
+	StringName &operator=(const StringName &p_name);
+	StringName &operator=(StringName &&p_name) {
+		if (_data == p_name._data) {
+			return *this;
+		}
+
+		unref();
+		_data = p_name._data;
+		p_name._data = nullptr;
+		return *this;
+	}
 	StringName(const char *p_name, bool p_static = false);
 	StringName(const StringName &p_name);
+	StringName(StringName &&p_name) {
+		_data = p_name._data;
+		p_name._data = nullptr;
+	}
 	StringName(const String &p_name, bool p_static = false);
 	StringName(const StaticCString &p_static_string, bool p_static = false);
 	StringName() {}
+
+	static void assign_static_unique_class_name(StringName *ptr, const char *p_name);
 	_FORCE_INLINE_ ~StringName() {
 		if (likely(configured) && _data) { //only free if configured
 			unref();

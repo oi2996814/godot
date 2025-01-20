@@ -1,32 +1,32 @@
-/*************************************************************************/
-/*  test_vector2.h                                                       */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  test_vector2.h                                                        */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #ifndef TEST_VECTOR2_H
 #define TEST_VECTOR2_H
@@ -49,16 +49,16 @@ TEST_CASE("[Vector2] Angle methods") {
 	const Vector2 vector_x = Vector2(1, 0);
 	const Vector2 vector_y = Vector2(0, 1);
 	CHECK_MESSAGE(
-			Math::is_equal_approx(vector_x.angle_to(vector_y), (real_t)Math_TAU / 4),
+			vector_x.angle_to(vector_y) == doctest::Approx((real_t)Math_TAU / 4),
 			"Vector2 angle_to should work as expected.");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(vector_y.angle_to(vector_x), (real_t)-Math_TAU / 4),
+			vector_y.angle_to(vector_x) == doctest::Approx((real_t)-Math_TAU / 4),
 			"Vector2 angle_to should work as expected.");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(vector_x.angle_to_point(vector_y), (real_t)Math_TAU * 3 / 8),
+			vector_x.angle_to_point(vector_y) == doctest::Approx((real_t)Math_TAU * 3 / 8),
 			"Vector2 angle_to_point should work as expected.");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(vector_y.angle_to_point(vector_x), (real_t)-Math_TAU / 8),
+			vector_y.angle_to_point(vector_x) == doctest::Approx((real_t)-Math_TAU / 8),
 			"Vector2 angle_to_point should work as expected.");
 }
 
@@ -113,10 +113,10 @@ TEST_CASE("[Vector2] Interpolation methods") {
 			Vector2(4, 6).slerp(Vector2(8, 10), 0.5).is_equal_approx(Vector2(5.9076470794008017626, 8.07918879020090480697)),
 			"Vector2 slerp should work as expected.");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(vector1.slerp(vector2, 0.5).length(), (real_t)4.31959610746631919),
+			vector1.slerp(vector2, 0.5).length() == doctest::Approx((real_t)4.31959610746631919),
 			"Vector2 slerp with different length input should return a vector with an interpolated length.");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(vector1.angle_to(vector1.slerp(vector2, 0.5)) * 2, vector1.angle_to(vector2)),
+			vector1.angle_to(vector1.slerp(vector2, 0.5)) * 2 == doctest::Approx(vector1.angle_to(vector2)),
 			"Vector2 slerp with different length input should return a vector with an interpolated angle.");
 	CHECK_MESSAGE(
 			vector1.cubic_interpolate(vector2, Vector2(), Vector2(7, 7), 0.5) == Vector2(2.375, 3.5),
@@ -136,19 +136,19 @@ TEST_CASE("[Vector2] Length methods") {
 			vector1.length_squared() == 200,
 			"Vector2 length_squared should work as expected and return exact result.");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(vector1.length(), 10 * (real_t)Math_SQRT2),
+			vector1.length() == doctest::Approx(10 * (real_t)Math_SQRT2),
 			"Vector2 length should work as expected.");
 	CHECK_MESSAGE(
 			vector2.length_squared() == 1300,
 			"Vector2 length_squared should work as expected and return exact result.");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(vector2.length(), (real_t)36.05551275463989293119),
+			vector2.length() == doctest::Approx((real_t)36.05551275463989293119),
 			"Vector2 length should work as expected.");
 	CHECK_MESSAGE(
 			vector1.distance_squared_to(vector2) == 500,
 			"Vector2 distance_squared_to should work as expected and return exact result.");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(vector1.distance_to(vector2), (real_t)22.36067977499789696409),
+			vector1.distance_to(vector2) == doctest::Approx((real_t)22.36067977499789696409),
 			"Vector2 distance_to should work as expected.");
 }
 
@@ -294,7 +294,7 @@ TEST_CASE("[Vector2] Operators") {
 TEST_CASE("[Vector2] Other methods") {
 	const Vector2 vector = Vector2(1.2, 3.4);
 	CHECK_MESSAGE(
-			Math::is_equal_approx(vector.aspect(), (real_t)1.2 / (real_t)3.4),
+			vector.aspect() == doctest::Approx((real_t)1.2 / (real_t)3.4),
 			"Vector2 aspect should work as expected.");
 
 	CHECK_MESSAGE(
@@ -353,7 +353,7 @@ TEST_CASE("[Vector2] Plane methods") {
 	const Vector2 vector = Vector2(1.2, 3.4);
 	const Vector2 vector_y = Vector2(0, 1);
 	const Vector2 vector_normal = Vector2(0.95879811270838721622267, 0.2840883296913739899919);
-	const Vector2 vector_non_normal = Vector2(5.4, 1.6);
+	const real_t p_d = 99.1;
 	CHECK_MESSAGE(
 			vector.bounce(vector_y) == Vector2(1.2, -3.4),
 			"Vector2 bounce on a plane with normal of the Y axis should.");
@@ -373,23 +373,29 @@ TEST_CASE("[Vector2] Plane methods") {
 			vector.project(vector_normal).is_equal_approx(Vector2(2.0292559899117276166, 0.60126103404791929382)),
 			"Vector2 projected on a normal should return expected value.");
 	CHECK_MESSAGE(
+			vector_normal.plane_project(p_d, vector).is_equal_approx(Vector2(94.187635516479631, 30.951892004882851)),
+			"Vector2 plane_project should return expected value.");
+	CHECK_MESSAGE(
 			vector.slide(vector_y) == Vector2(1.2, 0),
 			"Vector2 slide on a plane with normal of the Y axis should set the Y to zero.");
 	CHECK_MESSAGE(
 			vector.slide(vector_normal).is_equal_approx(Vector2(-0.8292559899117276166456, 2.798738965952080706179)),
 			"Vector2 slide with normal should return expected value.");
 	// There's probably a better way to test these ones?
+#ifdef MATH_CHECKS
+	const Vector2 vector_non_normal = Vector2(5.4, 1.6);
 	ERR_PRINT_OFF;
 	CHECK_MESSAGE(
 			vector.bounce(vector_non_normal).is_equal_approx(Vector2()),
-			"Vector2 bounce should return empty Vector2 with non-normalised input.");
+			"Vector2 bounce should return empty Vector2 with non-normalized input.");
 	CHECK_MESSAGE(
 			vector.reflect(vector_non_normal).is_equal_approx(Vector2()),
-			"Vector2 reflect should return empty Vector2 with non-normalised input.");
+			"Vector2 reflect should return empty Vector2 with non-normalized input.");
 	CHECK_MESSAGE(
 			vector.slide(vector_non_normal).is_equal_approx(Vector2()),
-			"Vector2 slide should return empty Vector2 with non-normalised input.");
+			"Vector2 slide should return empty Vector2 with non-normalized input.");
 	ERR_PRINT_ON;
+#endif // MATH_CHECKS
 }
 
 TEST_CASE("[Vector2] Rounding methods") {
@@ -443,10 +449,10 @@ TEST_CASE("[Vector2] Linear algebra methods") {
 			vector_y.cross(vector_x) == -1,
 			"Vector2 cross product of Y and X should give negative 1.");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(a.cross(b), (real_t)-28.1),
+			a.cross(b) == doctest::Approx((real_t)-28.1),
 			"Vector2 cross should return expected value.");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(Vector2(-a.x, a.y).cross(Vector2(b.x, -b.y)), (real_t)-28.1),
+			Vector2(-a.x, a.y).cross(Vector2(b.x, -b.y)) == doctest::Approx((real_t)-28.1),
 			"Vector2 cross should return expected value.");
 
 	CHECK_MESSAGE(
@@ -459,12 +465,38 @@ TEST_CASE("[Vector2] Linear algebra methods") {
 			(vector_x * 10).dot(vector_x * 10) == 100.0,
 			"Vector2 dot product of same direction vectors should behave as expected.");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(a.dot(b), (real_t)57.3),
+			a.dot(b) == doctest::Approx((real_t)57.3),
 			"Vector2 dot should return expected value.");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(Vector2(-a.x, a.y).dot(Vector2(b.x, -b.y)), (real_t)-57.3),
+			Vector2(-a.x, a.y).dot(Vector2(b.x, -b.y)) == doctest::Approx((real_t)-57.3),
 			"Vector2 dot should return expected value.");
 }
+
+TEST_CASE("[Vector2] Finite number checks") {
+	const double infinite[] = { NAN, INFINITY, -INFINITY };
+
+	CHECK_MESSAGE(
+			Vector2(0, 1).is_finite(),
+			"Vector2(0, 1) should be finite");
+
+	for (double x : infinite) {
+		CHECK_FALSE_MESSAGE(
+				Vector2(x, 1).is_finite(),
+				"Vector2 with one component infinite should not be finite.");
+		CHECK_FALSE_MESSAGE(
+				Vector2(0, x).is_finite(),
+				"Vector2 with one component infinite should not be finite.");
+	}
+
+	for (double x : infinite) {
+		for (double y : infinite) {
+			CHECK_FALSE_MESSAGE(
+					Vector2(x, y).is_finite(),
+					"Vector2 with two components infinite should not be finite.");
+		}
+	}
+}
+
 } // namespace TestVector2
 
 #endif // TEST_VECTOR2_H

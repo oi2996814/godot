@@ -1,32 +1,32 @@
-/*************************************************************************/
-/*  test_vector3.h                                                       */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  test_vector3.h                                                        */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #ifndef TEST_VECTOR3_H
 #define TEST_VECTOR3_H
@@ -52,26 +52,26 @@ TEST_CASE("[Vector3] Angle methods") {
 	const Vector3 vector_y = Vector3(0, 1, 0);
 	const Vector3 vector_yz = Vector3(0, 1, 1);
 	CHECK_MESSAGE(
-			Math::is_equal_approx(vector_x.angle_to(vector_y), (real_t)Math_TAU / 4),
+			vector_x.angle_to(vector_y) == doctest::Approx((real_t)Math_TAU / 4),
 			"Vector3 angle_to should work as expected.");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(vector_x.angle_to(vector_yz), (real_t)Math_TAU / 4),
+			vector_x.angle_to(vector_yz) == doctest::Approx((real_t)Math_TAU / 4),
 			"Vector3 angle_to should work as expected.");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(vector_yz.angle_to(vector_x), (real_t)Math_TAU / 4),
+			vector_yz.angle_to(vector_x) == doctest::Approx((real_t)Math_TAU / 4),
 			"Vector3 angle_to should work as expected.");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(vector_y.angle_to(vector_yz), (real_t)Math_TAU / 8),
+			vector_y.angle_to(vector_yz) == doctest::Approx((real_t)Math_TAU / 8),
 			"Vector3 angle_to should work as expected.");
 
 	CHECK_MESSAGE(
-			Math::is_equal_approx(vector_x.signed_angle_to(vector_y, vector_y), (real_t)Math_TAU / 4),
+			vector_x.signed_angle_to(vector_y, vector_y) == doctest::Approx((real_t)Math_TAU / 4),
 			"Vector3 signed_angle_to edge case should be positive.");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(vector_x.signed_angle_to(vector_yz, vector_y), (real_t)Math_TAU / -4),
+			vector_x.signed_angle_to(vector_yz, vector_y) == doctest::Approx((real_t)Math_TAU / -4),
 			"Vector3 signed_angle_to should work as expected.");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(vector_yz.signed_angle_to(vector_x, vector_y), (real_t)Math_TAU / 4),
+			vector_yz.signed_angle_to(vector_x, vector_y) == doctest::Approx((real_t)Math_TAU / 4),
 			"Vector3 signed_angle_to should work as expected.");
 }
 
@@ -130,10 +130,10 @@ TEST_CASE("[Vector3] Interpolation methods") {
 			Vector3(4, 6, 2).slerp(Vector3(8, 10, 3), 0.5).is_equal_approx(Vector3(5.90194219811429941053, 8.06758688849378394534, 2.558307894718317120038)),
 			"Vector3 slerp should work as expected.");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(vector1.slerp(vector2, 0.5).length(), (real_t)6.25831088708303172),
+			vector1.slerp(vector2, 0.5).length() == doctest::Approx((real_t)6.25831088708303172),
 			"Vector3 slerp with different length input should return a vector with an interpolated length.");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(vector1.angle_to(vector1.slerp(vector2, 0.5)) * 2, vector1.angle_to(vector2)),
+			vector1.angle_to(vector1.slerp(vector2, 0.5)) * 2 == doctest::Approx(vector1.angle_to(vector2)),
 			"Vector3 slerp with different length input should return a vector with an interpolated angle.");
 	CHECK_MESSAGE(
 			vector1.cubic_interpolate(vector2, Vector3(), Vector3(7, 7, 7), 0.5) == Vector3(2.375, 3.5, 4.625),
@@ -153,19 +153,19 @@ TEST_CASE("[Vector3] Length methods") {
 			vector1.length_squared() == 300,
 			"Vector3 length_squared should work as expected and return exact result.");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(vector1.length(), 10 * (real_t)Math_SQRT3),
+			vector1.length() == doctest::Approx(10 * (real_t)Math_SQRT3),
 			"Vector3 length should work as expected.");
 	CHECK_MESSAGE(
 			vector2.length_squared() == 2900,
 			"Vector3 length_squared should work as expected and return exact result.");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(vector2.length(), (real_t)53.8516480713450403125),
+			vector2.length() == doctest::Approx((real_t)53.8516480713450403125),
 			"Vector3 length should work as expected.");
 	CHECK_MESSAGE(
 			vector1.distance_squared_to(vector2) == 1400,
 			"Vector3 distance_squared_to should work as expected and return exact result.");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(vector1.distance_to(vector2), (real_t)37.41657386773941385584),
+			vector1.distance_to(vector2) == doctest::Approx((real_t)37.41657386773941385584),
 			"Vector3 distance_to should work as expected.");
 }
 
@@ -354,13 +354,20 @@ TEST_CASE("[Vector3] Other methods") {
 	CHECK_MESSAGE(
 			vector.snapped(Vector3(0.25, 0.25, 0.25)) == Vector3(1.25, 3.5, 5.5),
 			"Vector3 snapped to 0.25 should give exact results.");
+
+	CHECK_MESSAGE(
+			Vector3(1.2, 2.5, 2.0).is_equal_approx(vector.min(Vector3(3.0, 2.5, 2.0))),
+			"Vector3 min should return expected value.");
+
+	CHECK_MESSAGE(
+			Vector3(5.3, 3.4, 5.6).is_equal_approx(vector.max(Vector3(5.3, 2.0, 3.0))),
+			"Vector3 max should return expected value.");
 }
 
 TEST_CASE("[Vector3] Plane methods") {
 	const Vector3 vector = Vector3(1.2, 3.4, 5.6);
 	const Vector3 vector_y = Vector3(0, 1, 0);
 	const Vector3 vector_normal = Vector3(0.88763458893247992491, 0.26300284116517923701, 0.37806658417494515320);
-	const Vector3 vector_non_normal = Vector3(5.4, 1.6, 2.3);
 	CHECK_MESSAGE(
 			vector.bounce(vector_y) == Vector3(1.2, -3.4, 5.6),
 			"Vector3 bounce on a plane with normal of the Y axis should.");
@@ -386,17 +393,20 @@ TEST_CASE("[Vector3] Plane methods") {
 			vector.slide(vector_normal).is_equal_approx(Vector3(-2.41848149148878681437, 2.32785733585517427722237, 4.0587949202918130235)),
 			"Vector3 slide with normal should return expected value.");
 	// There's probably a better way to test these ones?
+#ifdef MATH_CHECKS
+	const Vector3 vector_non_normal = Vector3(5.4, 1.6, 2.3);
 	ERR_PRINT_OFF;
 	CHECK_MESSAGE(
 			vector.bounce(vector_non_normal).is_equal_approx(Vector3()),
-			"Vector3 bounce should return empty Vector3 with non-normalised input.");
+			"Vector3 bounce should return empty Vector3 with non-normalized input.");
 	CHECK_MESSAGE(
 			vector.reflect(vector_non_normal).is_equal_approx(Vector3()),
-			"Vector3 reflect should return empty Vector3 with non-normalised input.");
+			"Vector3 reflect should return empty Vector3 with non-normalized input.");
 	CHECK_MESSAGE(
 			vector.slide(vector_non_normal).is_equal_approx(Vector3()),
-			"Vector3 slide should return empty Vector3 with non-normalised input.");
+			"Vector3 slide should return empty Vector3 with non-normalized input.");
 	ERR_PRINT_ON;
+#endif // MATH_CHECKS
 }
 
 TEST_CASE("[Vector3] Rounding methods") {
@@ -473,12 +483,57 @@ TEST_CASE("[Vector3] Linear algebra methods") {
 			(vector_x * 10).dot(vector_x * 10) == 100.0,
 			"Vector3 dot product of same direction vectors should behave as expected.");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(a.dot(b), (real_t)75.24),
+			a.dot(b) == doctest::Approx((real_t)75.24),
 			"Vector3 dot should return expected value.");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(Vector3(-a.x, a.y, -a.z).dot(Vector3(b.x, -b.y, b.z)), (real_t)-75.24),
+			Vector3(-a.x, a.y, -a.z).dot(Vector3(b.x, -b.y, b.z)) == doctest::Approx((real_t)-75.24),
 			"Vector3 dot should return expected value.");
 }
+
+TEST_CASE("[Vector3] Finite number checks") {
+	const double infinite[] = { NAN, INFINITY, -INFINITY };
+
+	CHECK_MESSAGE(
+			Vector3(0, 1, 2).is_finite(),
+			"Vector3(0, 1, 2) should be finite");
+
+	for (double x : infinite) {
+		CHECK_FALSE_MESSAGE(
+				Vector3(x, 1, 2).is_finite(),
+				"Vector3 with one component infinite should not be finite.");
+		CHECK_FALSE_MESSAGE(
+				Vector3(0, x, 2).is_finite(),
+				"Vector3 with one component infinite should not be finite.");
+		CHECK_FALSE_MESSAGE(
+				Vector3(0, 1, x).is_finite(),
+				"Vector3 with one component infinite should not be finite.");
+	}
+
+	for (double x : infinite) {
+		for (double y : infinite) {
+			CHECK_FALSE_MESSAGE(
+					Vector3(x, y, 2).is_finite(),
+					"Vector3 with two components infinite should not be finite.");
+			CHECK_FALSE_MESSAGE(
+					Vector3(x, 1, y).is_finite(),
+					"Vector3 with two components infinite should not be finite.");
+			CHECK_FALSE_MESSAGE(
+					Vector3(0, x, y).is_finite(),
+					"Vector3 with two components infinite should not be finite.");
+		}
+	}
+
+	for (double x : infinite) {
+		for (double y : infinite) {
+			for (double z : infinite) {
+				CHECK_FALSE_MESSAGE(
+						Vector3(x, y, z).is_finite(),
+						"Vector3 with three components infinite should not be finite.");
+			}
+		}
+	}
+}
+
 } // namespace TestVector3
 
 #endif // TEST_VECTOR3_H

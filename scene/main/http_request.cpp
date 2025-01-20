@@ -1,39 +1,39 @@
-/*************************************************************************/
-/*  http_request.cpp                                                     */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  http_request.cpp                                                      */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #include "http_request.h"
-#include "core/io/compression.h"
+
 #include "scene/main/timer.h"
 
 Error HTTPRequest::_request() {
-	return client->connect_to_host(url, port, use_tls, validate_tls);
+	return client->connect_to_host(url, port, use_tls ? tls_options : nullptr);
 }
 
 Error HTTPRequest::_parse_url(const String &p_url) {
@@ -49,13 +49,16 @@ Error HTTPRequest::_parse_url(const String &p_url) {
 	redirections = 0;
 
 	String scheme;
-	Error err = p_url.parse_url(scheme, url, port, request_string);
-	ERR_FAIL_COND_V_MSG(err != OK, err, "Error parsing URL: " + p_url + ".");
+	String fragment;
+	Error err = p_url.parse_url(scheme, url, port, request_string, fragment);
+	ERR_FAIL_COND_V_MSG(err != OK, err, vformat("Error parsing URL: '%s'.", p_url));
+
 	if (scheme == "https://") {
 		use_tls = true;
 	} else if (scheme != "http://") {
-		ERR_FAIL_V_MSG(ERR_INVALID_PARAMETER, "Invalid URL scheme: " + scheme + ".");
+		ERR_FAIL_V_MSG(ERR_INVALID_PARAMETER, vformat("Invalid URL scheme: '%s'.", scheme));
 	}
+
 	if (port == 0) {
 		port = use_tls ? 443 : 80;
 	}
@@ -84,7 +87,7 @@ String HTTPRequest::get_header_value(const PackedStringArray &p_headers, const S
 
 	String lowwer_case_header_name = p_header_name.to_lower();
 	for (int i = 0; i < p_headers.size(); i++) {
-		if (p_headers[i].find(":") > 0) {
+		if (p_headers[i].find_char(':') > 0) {
 			Vector<String> parts = p_headers[i].split(":", false, 1);
 			if (parts.size() > 1 && parts[0].strip_edges().to_lower() == lowwer_case_header_name) {
 				value = parts[1].strip_edges();
@@ -96,7 +99,7 @@ String HTTPRequest::get_header_value(const PackedStringArray &p_headers, const S
 	return value;
 }
 
-Error HTTPRequest::request(const String &p_url, const Vector<String> &p_custom_headers, bool p_tls_validate_domain, HTTPClient::Method p_method, const String &p_request_data) {
+Error HTTPRequest::request(const String &p_url, const Vector<String> &p_custom_headers, HTTPClient::Method p_method, const String &p_request_data) {
 	// Copy the string into a raw buffer.
 	Vector<uint8_t> raw_data;
 
@@ -108,10 +111,10 @@ Error HTTPRequest::request(const String &p_url, const Vector<String> &p_custom_h
 		memcpy(w, charstr.ptr(), len);
 	}
 
-	return request_raw(p_url, p_custom_headers, p_tls_validate_domain, p_method, raw_data);
+	return request_raw(p_url, p_custom_headers, p_method, raw_data);
 }
 
-Error HTTPRequest::request_raw(const String &p_url, const Vector<String> &p_custom_headers, bool p_tls_validate_domain, HTTPClient::Method p_method, const Vector<uint8_t> &p_request_data_raw) {
+Error HTTPRequest::request_raw(const String &p_url, const Vector<String> &p_custom_headers, HTTPClient::Method p_method, const Vector<uint8_t> &p_request_data_raw) {
 	ERR_FAIL_COND_V(!is_inside_tree(), ERR_UNCONFIGURED);
 	ERR_FAIL_COND_V_MSG(requesting, ERR_BUSY, "HTTPRequest is processing a request. Wait for completion or cancel it before attempting a new one.");
 
@@ -126,8 +129,6 @@ Error HTTPRequest::request_raw(const String &p_url, const Vector<String> &p_cust
 	if (err) {
 		return err;
 	}
-
-	validate_tls = p_tls_validate_domain;
 
 	headers = p_custom_headers;
 
@@ -192,7 +193,9 @@ void HTTPRequest::cancel_request() {
 		set_process_internal(false);
 	} else {
 		thread_request_quit.set();
-		thread.wait_to_finish();
+		if (thread.is_started()) {
+			thread.wait_to_finish();
+		}
 	}
 
 	file.unref();
@@ -237,7 +240,7 @@ bool HTTPRequest::_handle_response(bool *ret_value) {
 		String new_request;
 
 		for (const String &E : rheaders) {
-			if (E.findn("Location: ") != -1) {
+			if (E.containsn("Location: ")) {
 				new_request = E.substr(9, E.length()).strip_edges();
 			}
 		}
@@ -276,10 +279,10 @@ bool HTTPRequest::_handle_response(bool *ret_value) {
 	}
 	if (content_encoding == "gzip") {
 		decompressor.instantiate();
-		decompressor->start_decompression(false, get_download_chunk_size() * 2);
+		decompressor->start_decompression(false, get_download_chunk_size());
 	} else if (content_encoding == "deflate") {
 		decompressor.instantiate();
-		decompressor->start_decompression(true, get_download_chunk_size() * 2);
+		decompressor->start_decompression(true, get_download_chunk_size());
 	}
 
 	return false;
@@ -390,19 +393,38 @@ bool HTTPRequest::_update_connection() {
 				return false;
 			}
 
-			PackedByteArray chunk = client->read_response_body_chunk();
-			downloaded.add(chunk.size());
+			PackedByteArray chunk;
+			if (decompressor.is_null()) {
+				// Chunk can be read directly.
+				chunk = client->read_response_body_chunk();
+				downloaded.add(chunk.size());
+			} else {
+				// Chunk is the result of decompression.
+				PackedByteArray compressed = client->read_response_body_chunk();
+				downloaded.add(compressed.size());
 
-			// Decompress chunk if needed.
-			if (decompressor.is_valid()) {
-				Error err = decompressor->put_data(chunk.ptr(), chunk.size());
-				if (err == OK) {
-					chunk.resize(decompressor->get_available_bytes());
-					err = decompressor->get_data(chunk.ptrw(), chunk.size());
-				}
-				if (err != OK) {
-					_defer_done(RESULT_BODY_DECOMPRESS_FAILED, response_code, response_headers, PackedByteArray());
-					return true;
+				int pos = 0;
+				int left = compressed.size();
+				while (left) {
+					int w = 0;
+					Error err = decompressor->put_partial_data(compressed.ptr() + pos, left, w);
+					if (err == OK) {
+						PackedByteArray dc;
+						dc.resize(decompressor->get_available_bytes());
+						err = decompressor->get_data(dc.ptrw(), dc.size());
+						chunk.append_array(dc);
+					}
+					if (err != OK) {
+						_defer_done(RESULT_BODY_DECOMPRESS_FAILED, response_code, response_headers, PackedByteArray());
+						return true;
+					}
+					// We need this check here because a "zip bomb" could result in a chunk of few kilos decompressing into gigabytes of data.
+					if (body_size_limit >= 0 && final_body_size.get() + chunk.size() > body_size_limit) {
+						_defer_done(RESULT_BODY_SIZE_LIMIT_EXCEEDED, response_code, response_headers, PackedByteArray());
+						return true;
+					}
+					pos += w;
+					left -= w;
 				}
 			}
 			final_body_size.add(chunk.size());
@@ -453,7 +475,7 @@ bool HTTPRequest::_update_connection() {
 }
 
 void HTTPRequest::_defer_done(int p_status, int p_code, const PackedStringArray &p_headers, const PackedByteArray &p_data) {
-	call_deferred(SNAME("_request_done"), p_status, p_code, p_headers, p_data);
+	callable_mp(this, &HTTPRequest::_request_done).call_deferred(p_status, p_code, p_headers, p_data);
 }
 
 void HTTPRequest::_request_done(int p_status, int p_code, const PackedStringArray &p_headers, const PackedByteArray &p_data) {
@@ -484,7 +506,9 @@ void HTTPRequest::_notification(int p_what) {
 
 void HTTPRequest::set_use_threads(bool p_use) {
 	ERR_FAIL_COND(get_http_client_status() != HTTPClient::STATUS_DISCONNECTED);
+#ifdef THREADS_ENABLED
 	use_threads.set_to(p_use);
+#endif
 }
 
 bool HTTPRequest::is_using_threads() const {
@@ -571,10 +595,16 @@ void HTTPRequest::_timeout() {
 	_defer_done(RESULT_TIMEOUT, 0, PackedStringArray(), PackedByteArray());
 }
 
+void HTTPRequest::set_tls_options(const Ref<TLSOptions> &p_options) {
+	ERR_FAIL_COND(p_options.is_null() || p_options->is_server());
+	tls_options = p_options;
+}
+
 void HTTPRequest::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("request", "url", "custom_headers", "tls_validate_domain", "method", "request_data"), &HTTPRequest::request, DEFVAL(PackedStringArray()), DEFVAL(true), DEFVAL(HTTPClient::METHOD_GET), DEFVAL(String()));
-	ClassDB::bind_method(D_METHOD("request_raw", "url", "custom_headers", "tls_validate_domain", "method", "request_data_raw"), &HTTPRequest::request_raw, DEFVAL(PackedStringArray()), DEFVAL(true), DEFVAL(HTTPClient::METHOD_GET), DEFVAL(PackedByteArray()));
+	ClassDB::bind_method(D_METHOD("request", "url", "custom_headers", "method", "request_data"), &HTTPRequest::request, DEFVAL(PackedStringArray()), DEFVAL(HTTPClient::METHOD_GET), DEFVAL(String()));
+	ClassDB::bind_method(D_METHOD("request_raw", "url", "custom_headers", "method", "request_data_raw"), &HTTPRequest::request_raw, DEFVAL(PackedStringArray()), DEFVAL(HTTPClient::METHOD_GET), DEFVAL(PackedByteArray()));
 	ClassDB::bind_method(D_METHOD("cancel_request"), &HTTPRequest::cancel_request);
+	ClassDB::bind_method(D_METHOD("set_tls_options", "client_options"), &HTTPRequest::set_tls_options);
 
 	ClassDB::bind_method(D_METHOD("get_http_client_status"), &HTTPRequest::get_http_client_status);
 
@@ -595,8 +625,6 @@ void HTTPRequest::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("get_downloaded_bytes"), &HTTPRequest::get_downloaded_bytes);
 	ClassDB::bind_method(D_METHOD("get_body_size"), &HTTPRequest::get_body_size);
-
-	ClassDB::bind_method(D_METHOD("_request_done"), &HTTPRequest::_request_done);
 
 	ClassDB::bind_method(D_METHOD("set_timeout", "timeout"), &HTTPRequest::set_timeout);
 	ClassDB::bind_method(D_METHOD("get_timeout"), &HTTPRequest::get_timeout);
@@ -635,6 +663,7 @@ void HTTPRequest::_bind_methods() {
 
 HTTPRequest::HTTPRequest() {
 	client = Ref<HTTPClient>(HTTPClient::create());
+	tls_options = TLSOptions::client();
 	timer = memnew(Timer);
 	timer->set_one_shot(true);
 	timer->connect("timeout", callable_mp(this, &HTTPRequest::_timeout));

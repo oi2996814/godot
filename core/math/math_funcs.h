@@ -1,36 +1,37 @@
-/*************************************************************************/
-/*  math_funcs.h                                                         */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  math_funcs.h                                                          */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #ifndef MATH_FUNCS_H
 #define MATH_FUNCS_H
 
+#include "core/error/error_macros.h"
 #include "core/math/math_defs.h"
 #include "core/math/random_pcg.h"
 #include "core/typedefs.h"
@@ -73,11 +74,13 @@ public:
 	static _ALWAYS_INLINE_ double tanh(double p_x) { return ::tanh(p_x); }
 	static _ALWAYS_INLINE_ float tanh(float p_x) { return ::tanhf(p_x); }
 
-	static _ALWAYS_INLINE_ double asin(double p_x) { return ::asin(p_x); }
-	static _ALWAYS_INLINE_ float asin(float p_x) { return ::asinf(p_x); }
+	// Always does clamping so always safe to use.
+	static _ALWAYS_INLINE_ double asin(double p_x) { return p_x < -1 ? (-Math_PI / 2) : (p_x > 1 ? (Math_PI / 2) : ::asin(p_x)); }
+	static _ALWAYS_INLINE_ float asin(float p_x) { return p_x < -1 ? (-Math_PI / 2) : (p_x > 1 ? (Math_PI / 2) : ::asinf(p_x)); }
 
-	static _ALWAYS_INLINE_ double acos(double p_x) { return ::acos(p_x); }
-	static _ALWAYS_INLINE_ float acos(float p_x) { return ::acosf(p_x); }
+	// Always does clamping so always safe to use.
+	static _ALWAYS_INLINE_ double acos(double p_x) { return p_x < -1 ? Math_PI : (p_x > 1 ? 0 : ::acos(p_x)); }
+	static _ALWAYS_INLINE_ float acos(float p_x) { return p_x < -1 ? Math_PI : (p_x > 1 ? 0 : ::acosf(p_x)); }
 
 	static _ALWAYS_INLINE_ double atan(double p_x) { return ::atan(p_x); }
 	static _ALWAYS_INLINE_ float atan(float p_x) { return ::atanf(p_x); }
@@ -85,11 +88,25 @@ public:
 	static _ALWAYS_INLINE_ double atan2(double p_y, double p_x) { return ::atan2(p_y, p_x); }
 	static _ALWAYS_INLINE_ float atan2(float p_y, float p_x) { return ::atan2f(p_y, p_x); }
 
+	static _ALWAYS_INLINE_ double asinh(double p_x) { return ::asinh(p_x); }
+	static _ALWAYS_INLINE_ float asinh(float p_x) { return ::asinhf(p_x); }
+
+	// Always does clamping so always safe to use.
+	static _ALWAYS_INLINE_ double acosh(double p_x) { return p_x < 1 ? 0 : ::acosh(p_x); }
+	static _ALWAYS_INLINE_ float acosh(float p_x) { return p_x < 1 ? 0 : ::acoshf(p_x); }
+
+	// Always does clamping so always safe to use.
+	static _ALWAYS_INLINE_ double atanh(double p_x) { return p_x <= -1 ? -INFINITY : (p_x >= 1 ? INFINITY : ::atanh(p_x)); }
+	static _ALWAYS_INLINE_ float atanh(float p_x) { return p_x <= -1 ? -INFINITY : (p_x >= 1 ? INFINITY : ::atanhf(p_x)); }
+
 	static _ALWAYS_INLINE_ double sqrt(double p_x) { return ::sqrt(p_x); }
 	static _ALWAYS_INLINE_ float sqrt(float p_x) { return ::sqrtf(p_x); }
 
 	static _ALWAYS_INLINE_ double fmod(double p_x, double p_y) { return ::fmod(p_x, p_y); }
 	static _ALWAYS_INLINE_ float fmod(float p_x, float p_y) { return ::fmodf(p_x, p_y); }
+
+	static _ALWAYS_INLINE_ double modf(double p_x, double *r_y) { return ::modf(p_x, r_y); }
+	static _ALWAYS_INLINE_ float modf(float p_x, float *r_y) { return ::modff(p_x, r_y); }
 
 	static _ALWAYS_INLINE_ double floor(double p_x) { return ::floor(p_x); }
 	static _ALWAYS_INLINE_ float floor(float p_x) { return ::floorf(p_x); }
@@ -184,6 +201,25 @@ public:
 #endif
 	}
 
+	// These methods assume (p_num + p_den) doesn't overflow.
+	static _ALWAYS_INLINE_ int32_t division_round_up(int32_t p_num, int32_t p_den) {
+		int32_t offset = (p_num < 0 && p_den < 0) ? 1 : -1;
+		return (p_num + p_den + offset) / p_den;
+	}
+	static _ALWAYS_INLINE_ uint32_t division_round_up(uint32_t p_num, uint32_t p_den) {
+		return (p_num + p_den - 1) / p_den;
+	}
+	static _ALWAYS_INLINE_ int64_t division_round_up(int64_t p_num, int64_t p_den) {
+		int32_t offset = (p_num < 0 && p_den < 0) ? 1 : -1;
+		return (p_num + p_den + offset) / p_den;
+	}
+	static _ALWAYS_INLINE_ uint64_t division_round_up(uint64_t p_num, uint64_t p_den) {
+		return (p_num + p_den - 1) / p_den;
+	}
+
+	static _ALWAYS_INLINE_ bool is_finite(double p_val) { return isfinite(p_val); }
+	static _ALWAYS_INLINE_ bool is_finite(float p_val) { return isfinite(p_val); }
+
 	static _ALWAYS_INLINE_ double abs(double g) { return absd(g); }
 	static _ALWAYS_INLINE_ float abs(float g) { return absf(g); }
 	static _ALWAYS_INLINE_ int abs(int g) { return g > 0 ? g : -g; }
@@ -222,6 +258,7 @@ public:
 	}
 
 	static _ALWAYS_INLINE_ int64_t posmod(int64_t p_x, int64_t p_y) {
+		ERR_FAIL_COND_V_MSG(p_y == 0, 0, "Division by zero in posmod is undefined. Returning 0 as fallback.");
 		int64_t value = p_x % p_y;
 		if (((value < 0) && (p_y > 0)) || ((value > 0) && (p_y < 0))) {
 			value += p_y;
@@ -361,15 +398,40 @@ public:
 		return p_start * omt3 + p_control_1 * omt2 * p_t * 3.0f + p_control_2 * omt * t2 * 3.0f + p_end * t3;
 	}
 
-	static _ALWAYS_INLINE_ double lerp_angle(double p_from, double p_to, double p_weight) {
+	static _ALWAYS_INLINE_ double bezier_derivative(double p_start, double p_control_1, double p_control_2, double p_end, double p_t) {
+		/* Formula from Wikipedia article on Bezier curves. */
+		double omt = (1.0 - p_t);
+		double omt2 = omt * omt;
+		double t2 = p_t * p_t;
+
+		double d = (p_control_1 - p_start) * 3.0 * omt2 + (p_control_2 - p_control_1) * 6.0 * omt * p_t + (p_end - p_control_2) * 3.0 * t2;
+		return d;
+	}
+
+	static _ALWAYS_INLINE_ float bezier_derivative(float p_start, float p_control_1, float p_control_2, float p_end, float p_t) {
+		/* Formula from Wikipedia article on Bezier curves. */
+		float omt = (1.0f - p_t);
+		float omt2 = omt * omt;
+		float t2 = p_t * p_t;
+
+		float d = (p_control_1 - p_start) * 3.0f * omt2 + (p_control_2 - p_control_1) * 6.0f * omt * p_t + (p_end - p_control_2) * 3.0f * t2;
+		return d;
+	}
+
+	static _ALWAYS_INLINE_ double angle_difference(double p_from, double p_to) {
 		double difference = fmod(p_to - p_from, Math_TAU);
-		double distance = fmod(2.0 * difference, Math_TAU) - difference;
-		return p_from + distance * p_weight;
+		return fmod(2.0 * difference, Math_TAU) - difference;
+	}
+	static _ALWAYS_INLINE_ float angle_difference(float p_from, float p_to) {
+		float difference = fmod(p_to - p_from, (float)Math_TAU);
+		return fmod(2.0f * difference, (float)Math_TAU) - difference;
+	}
+
+	static _ALWAYS_INLINE_ double lerp_angle(double p_from, double p_to, double p_weight) {
+		return p_from + Math::angle_difference(p_from, p_to) * p_weight;
 	}
 	static _ALWAYS_INLINE_ float lerp_angle(float p_from, float p_to, float p_weight) {
-		float difference = fmod(p_to - p_from, (float)Math_TAU);
-		float distance = fmod(2.0f * difference, (float)Math_TAU) - difference;
-		return p_from + distance * p_weight;
+		return p_from + Math::angle_difference(p_from, p_to) * p_weight;
 	}
 
 	static _ALWAYS_INLINE_ double inverse_lerp(double p_from, double p_to, double p_value) {
@@ -388,23 +450,45 @@ public:
 
 	static _ALWAYS_INLINE_ double smoothstep(double p_from, double p_to, double p_s) {
 		if (is_equal_approx(p_from, p_to)) {
-			return p_from;
+			if (likely(p_from <= p_to)) {
+				return p_s <= p_from ? 0.0 : 1.0;
+			} else {
+				return p_s <= p_to ? 1.0 : 0.0;
+			}
 		}
 		double s = CLAMP((p_s - p_from) / (p_to - p_from), 0.0, 1.0);
 		return s * s * (3.0 - 2.0 * s);
 	}
 	static _ALWAYS_INLINE_ float smoothstep(float p_from, float p_to, float p_s) {
 		if (is_equal_approx(p_from, p_to)) {
-			return p_from;
+			if (likely(p_from <= p_to)) {
+				return p_s <= p_from ? 0.0f : 1.0f;
+			} else {
+				return p_s <= p_to ? 1.0f : 0.0f;
+			}
 		}
 		float s = CLAMP((p_s - p_from) / (p_to - p_from), 0.0f, 1.0f);
 		return s * s * (3.0f - 2.0f * s);
 	}
+
 	static _ALWAYS_INLINE_ double move_toward(double p_from, double p_to, double p_delta) {
 		return abs(p_to - p_from) <= p_delta ? p_to : p_from + SIGN(p_to - p_from) * p_delta;
 	}
 	static _ALWAYS_INLINE_ float move_toward(float p_from, float p_to, float p_delta) {
 		return abs(p_to - p_from) <= p_delta ? p_to : p_from + SIGN(p_to - p_from) * p_delta;
+	}
+
+	static _ALWAYS_INLINE_ double rotate_toward(double p_from, double p_to, double p_delta) {
+		double difference = Math::angle_difference(p_from, p_to);
+		double abs_difference = Math::abs(difference);
+		// When `p_delta < 0` move no further than to PI radians away from `p_to` (as PI is the max possible angle distance).
+		return p_from + CLAMP(p_delta, abs_difference - Math_PI, abs_difference) * (difference >= 0.0 ? 1.0 : -1.0);
+	}
+	static _ALWAYS_INLINE_ float rotate_toward(float p_from, float p_to, float p_delta) {
+		float difference = Math::angle_difference(p_from, p_to);
+		float abs_difference = Math::abs(difference);
+		// When `p_delta < 0` move no further than to PI radians away from `p_to` (as PI is the max possible angle distance).
+		return p_from + CLAMP(p_delta, abs_difference - (float)Math_PI, abs_difference) * (difference >= 0.0f ? 1.0f : -1.0f);
 	}
 
 	static _ALWAYS_INLINE_ double linear_to_db(double p_linear) {
@@ -430,7 +514,10 @@ public:
 	}
 	static _ALWAYS_INLINE_ double wrapf(double value, double min, double max) {
 		double range = max - min;
-		double result = is_zero_approx(range) ? min : value - (range * Math::floor((value - min) / range));
+		if (is_zero_approx(range)) {
+			return min;
+		}
+		double result = value - (range * Math::floor((value - min) / range));
 		if (is_equal_approx(result, max)) {
 			return min;
 		}
@@ -438,7 +525,10 @@ public:
 	}
 	static _ALWAYS_INLINE_ float wrapf(float value, float min, float max) {
 		float range = max - min;
-		float result = is_zero_approx(range) ? min : value - (range * Math::floor((value - min) / range));
+		if (is_zero_approx(range)) {
+			return min;
+		}
+		float result = value - (range * Math::floor((value - min) / range));
 		if (is_equal_approx(result, max)) {
 			return min;
 		}

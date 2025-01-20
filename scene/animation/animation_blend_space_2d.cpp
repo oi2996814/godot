@@ -1,32 +1,32 @@
-/*************************************************************************/
-/*  animation_blend_space_2d.cpp                                         */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  animation_blend_space_2d.cpp                                          */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #include "animation_blend_space_2d.h"
 
@@ -34,16 +34,19 @@
 #include "core/math/geometry_2d.h"
 
 void AnimationNodeBlendSpace2D::get_parameter_list(List<PropertyInfo> *r_list) const {
+	AnimationNode::get_parameter_list(r_list);
 	r_list->push_back(PropertyInfo(Variant::VECTOR2, blend_position));
 	r_list->push_back(PropertyInfo(Variant::INT, closest, PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NONE));
-	r_list->push_back(PropertyInfo(Variant::FLOAT, length_internal, PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NONE));
 }
 
 Variant AnimationNodeBlendSpace2D::get_parameter_default_value(const StringName &p_parameter) const {
+	Variant ret = AnimationNode::get_parameter_default_value(p_parameter);
+	if (ret != Variant()) {
+		return ret;
+	}
+
 	if (p_parameter == closest) {
 		return -1;
-	} else if (p_parameter == length_internal) {
-		return 0;
 	} else {
 		return Vector2();
 	}
@@ -81,6 +84,8 @@ void AnimationNodeBlendSpace2D::add_blend_point(const Ref<AnimationRootNode> &p_
 	blend_points[p_at_index].position = p_position;
 
 	blend_points[p_at_index].node->connect("tree_changed", callable_mp(this, &AnimationNodeBlendSpace2D::_tree_changed), CONNECT_REFERENCE_COUNTED);
+	blend_points[p_at_index].node->connect("animation_node_renamed", callable_mp(this, &AnimationNodeBlendSpace2D::_animation_node_renamed), CONNECT_REFERENCE_COUNTED);
+	blend_points[p_at_index].node->connect("animation_node_removed", callable_mp(this, &AnimationNodeBlendSpace2D::_animation_node_removed), CONNECT_REFERENCE_COUNTED);
 	blend_points_used++;
 
 	_queue_auto_triangles();
@@ -100,20 +105,24 @@ void AnimationNodeBlendSpace2D::set_blend_point_node(int p_point, const Ref<Anim
 
 	if (blend_points[p_point].node.is_valid()) {
 		blend_points[p_point].node->disconnect("tree_changed", callable_mp(this, &AnimationNodeBlendSpace2D::_tree_changed));
+		blend_points[p_point].node->disconnect("animation_node_renamed", callable_mp(this, &AnimationNodeBlendSpace2D::_animation_node_renamed));
+		blend_points[p_point].node->disconnect("animation_node_removed", callable_mp(this, &AnimationNodeBlendSpace2D::_animation_node_removed));
 	}
 	blend_points[p_point].node = p_node;
 	blend_points[p_point].node->connect("tree_changed", callable_mp(this, &AnimationNodeBlendSpace2D::_tree_changed), CONNECT_REFERENCE_COUNTED);
+	blend_points[p_point].node->connect("animation_node_renamed", callable_mp(this, &AnimationNodeBlendSpace2D::_animation_node_renamed), CONNECT_REFERENCE_COUNTED);
+	blend_points[p_point].node->connect("animation_node_removed", callable_mp(this, &AnimationNodeBlendSpace2D::_animation_node_removed), CONNECT_REFERENCE_COUNTED);
 
 	emit_signal(SNAME("tree_changed"));
 }
 
 Vector2 AnimationNodeBlendSpace2D::get_blend_point_position(int p_point) const {
-	ERR_FAIL_INDEX_V(p_point, blend_points_used, Vector2());
+	ERR_FAIL_INDEX_V(p_point, MAX_BLEND_POINTS, Vector2());
 	return blend_points[p_point].position;
 }
 
 Ref<AnimationRootNode> AnimationNodeBlendSpace2D::get_blend_point_node(int p_point) const {
-	ERR_FAIL_INDEX_V(p_point, blend_points_used, Ref<AnimationRootNode>());
+	ERR_FAIL_INDEX_V(p_point, MAX_BLEND_POINTS, Ref<AnimationRootNode>());
 	return blend_points[p_point].node;
 }
 
@@ -122,6 +131,8 @@ void AnimationNodeBlendSpace2D::remove_blend_point(int p_point) {
 
 	ERR_FAIL_COND(blend_points[p_point].node.is_null());
 	blend_points[p_point].node->disconnect("tree_changed", callable_mp(this, &AnimationNodeBlendSpace2D::_tree_changed));
+	blend_points[p_point].node->disconnect("animation_node_renamed", callable_mp(this, &AnimationNodeBlendSpace2D::_animation_node_renamed));
+	blend_points[p_point].node->disconnect("animation_node_removed", callable_mp(this, &AnimationNodeBlendSpace2D::_animation_node_removed));
 
 	for (int i = 0; i < triangles.size(); i++) {
 		bool erase = false;
@@ -144,6 +155,8 @@ void AnimationNodeBlendSpace2D::remove_blend_point(int p_point) {
 		blend_points[i] = blend_points[i + 1];
 	}
 	blend_points_used--;
+
+	emit_signal(SNAME("animation_node_removed"), get_instance_id(), itos(p_point));
 	emit_signal(SNAME("tree_changed"));
 }
 
@@ -303,7 +316,7 @@ void AnimationNodeBlendSpace2D::_set_triangles(const Vector<int> &p_triangles) {
 
 Vector<int> AnimationNodeBlendSpace2D::_get_triangles() const {
 	Vector<int> t;
-	if (auto_triangles && trianges_dirty) {
+	if (auto_triangles && triangles_dirty) {
 		return t;
 	}
 
@@ -317,20 +330,20 @@ Vector<int> AnimationNodeBlendSpace2D::_get_triangles() const {
 }
 
 void AnimationNodeBlendSpace2D::_queue_auto_triangles() {
-	if (!auto_triangles || trianges_dirty) {
+	if (!auto_triangles || triangles_dirty) {
 		return;
 	}
 
-	trianges_dirty = true;
-	call_deferred(SNAME("_update_triangles"));
+	triangles_dirty = true;
+	callable_mp(this, &AnimationNodeBlendSpace2D::_update_triangles).call_deferred();
 }
 
 void AnimationNodeBlendSpace2D::_update_triangles() {
-	if (!auto_triangles || !trianges_dirty) {
+	if (!auto_triangles || !triangles_dirty) {
 		return;
 	}
 
-	trianges_dirty = false;
+	triangles_dirty = false;
 	triangles.clear();
 	if (blend_points_used < 3) {
 		emit_signal(SNAME("triangles_updated"));
@@ -343,10 +356,10 @@ void AnimationNodeBlendSpace2D::_update_triangles() {
 		points.write[i] = blend_points[i].position;
 	}
 
-	Vector<Delaunay2D::Triangle> triangles = Delaunay2D::triangulate(points);
+	Vector<Delaunay2D::Triangle> tr = Delaunay2D::triangulate(points);
 
-	for (int i = 0; i < triangles.size(); i++) {
-		add_triangle(triangles[i].points[0], triangles[i].points[1], triangles[i].points[2]);
+	for (int i = 0; i < tr.size(); i++) {
+		add_triangle(tr[i].points[0], tr[i].points[1], tr[i].points[2]);
 	}
 	emit_signal(SNAME("triangles_updated"));
 }
@@ -376,9 +389,9 @@ Vector2 AnimationNodeBlendSpace2D::get_closest_point(const Vector2 &p_point) {
 				points[j],
 				points[(j + 1) % 3]
 			};
-			Vector2 closest = Geometry2D::get_closest_point_to_segment(p_point, s);
-			if (first || closest.distance_to(p_point) < best_point.distance_to(p_point)) {
-				best_point = closest;
+			Vector2 closest_point = Geometry2D::get_closest_point_to_segment(p_point, s);
+			if (first || closest_point.distance_to(p_point) < best_point.distance_to(p_point)) {
+				best_point = closest_point;
 				first = false;
 			}
 		}
@@ -432,17 +445,22 @@ void AnimationNodeBlendSpace2D::_blend_triangle(const Vector2 &p_pos, const Vect
 	r_weights[2] = w;
 }
 
-double AnimationNodeBlendSpace2D::process(double p_time, bool p_seek, bool p_seek_root) {
+AnimationNode::NodeTimeInfo AnimationNodeBlendSpace2D::_process(const AnimationMixer::PlaybackInfo p_playback_info, bool p_test_only) {
 	_update_triangles();
 
+	if (!blend_points_used) {
+		return NodeTimeInfo();
+	}
+
 	Vector2 blend_pos = get_parameter(blend_position);
-	int closest = get_parameter(this->closest);
-	double length_internal = get_parameter(this->length_internal);
-	double mind = 0.0; //time of min distance point
+	int cur_closest = get_parameter(closest);
+	NodeTimeInfo mind; //time of min distance point
+
+	AnimationMixer::PlaybackInfo pi = p_playback_info;
 
 	if (blend_mode == BLEND_MODE_INTERPOLATED) {
-		if (triangles.size() == 0) {
-			return 0;
+		if (triangles.is_empty()) {
+			return NodeTimeInfo();
 		}
 
 		Vector2 best_point;
@@ -488,7 +506,7 @@ double AnimationNodeBlendSpace2D::process(double p_time, bool p_seek, bool p_see
 			}
 		}
 
-		ERR_FAIL_COND_V(blend_triangle == -1, 0); //should never reach here
+		ERR_FAIL_COND_V(blend_triangle == -1, NodeTimeInfo()); //should never reach here
 
 		int triangle_points[3];
 		for (int j = 0; j < 3; j++) {
@@ -497,14 +515,17 @@ double AnimationNodeBlendSpace2D::process(double p_time, bool p_seek, bool p_see
 
 		first = true;
 
+		double max_weight = 0.0;
 		for (int i = 0; i < blend_points_used; i++) {
 			bool found = false;
 			for (int j = 0; j < 3; j++) {
 				if (i == triangle_points[j]) {
 					//blend with the given weight
-					double t = blend_node(blend_points[i].name, blend_points[i].node, p_time, p_seek, p_seek_root, blend_weights[j], FILTER_IGNORE, true);
-					if (first || t < mind) {
+					pi.weight = blend_weights[j];
+					NodeTimeInfo t = blend_node(blend_points[i].node, blend_points[i].name, pi, FILTER_IGNORE, true, p_test_only);
+					if (first || pi.weight > max_weight) {
 						mind = t;
+						max_weight = pi.weight;
 						first = false;
 					}
 					found = true;
@@ -512,8 +533,9 @@ double AnimationNodeBlendSpace2D::process(double p_time, bool p_seek, bool p_see
 				}
 			}
 
-			if (!found) {
-				blend_node(blend_points[i].name, blend_points[i].node, p_time, p_seek, p_seek_root, 0, FILTER_IGNORE, sync);
+			if (sync && !found) {
+				pi.weight = 0;
+				blend_node(blend_points[i].node, blend_points[i].name, pi, FILTER_IGNORE, true, p_test_only);
 			}
 		}
 	} else {
@@ -528,37 +550,42 @@ double AnimationNodeBlendSpace2D::process(double p_time, bool p_seek, bool p_see
 			}
 		}
 
-		if (new_closest != closest && new_closest != -1) {
-			double from = 0.0;
-			if (blend_mode == BLEND_MODE_DISCRETE_CARRY && closest != -1) {
-				//for ping-pong loop
-				Ref<AnimationNodeAnimation> na_c = static_cast<Ref<AnimationNodeAnimation>>(blend_points[closest].node);
+		if (new_closest != cur_closest && new_closest != -1) {
+			if (blend_mode == BLEND_MODE_DISCRETE_CARRY && cur_closest != -1) {
+				NodeTimeInfo from;
+				// For ping-pong loop.
+				Ref<AnimationNodeAnimation> na_c = static_cast<Ref<AnimationNodeAnimation>>(blend_points[cur_closest].node);
 				Ref<AnimationNodeAnimation> na_n = static_cast<Ref<AnimationNodeAnimation>>(blend_points[new_closest].node);
-				if (!na_c.is_null() && !na_n.is_null()) {
+				if (na_c.is_valid() && na_n.is_valid()) {
 					na_n->set_backward(na_c->is_backward());
 				}
-				//see how much animation remains
-				from = length_internal - blend_node(blend_points[closest].name, blend_points[closest].node, p_time, false, p_seek_root, 0.0, FILTER_IGNORE, true);
+				// See how much animation remains.
+				pi.seeked = false;
+				pi.weight = 0;
+				from = blend_node(blend_points[cur_closest].node, blend_points[cur_closest].name, pi, FILTER_IGNORE, true, true);
+				pi.time = from.position;
 			}
-
-			mind = blend_node(blend_points[new_closest].name, blend_points[new_closest].node, from, true, p_seek_root, 1.0, FILTER_IGNORE, true);
-			length_internal = from + mind;
-
-			closest = new_closest;
-
+			pi.seeked = true;
+			pi.weight = 1.0;
+			mind = blend_node(blend_points[new_closest].node, blend_points[new_closest].name, pi, FILTER_IGNORE, true, p_test_only);
+			cur_closest = new_closest;
 		} else {
-			mind = blend_node(blend_points[closest].name, blend_points[closest].node, p_time, p_seek, p_seek_root, 1.0, FILTER_IGNORE, true);
+			pi.weight = 1.0;
+			mind = blend_node(blend_points[cur_closest].node, blend_points[cur_closest].name, pi, FILTER_IGNORE, true, p_test_only);
 		}
 
-		for (int i = 0; i < blend_points_used; i++) {
-			if (i != closest) {
-				blend_node(blend_points[i].name, blend_points[i].node, p_time, p_seek, p_seek_root, 0, FILTER_IGNORE, sync);
+		if (sync) {
+			pi = p_playback_info;
+			pi.weight = 0;
+			for (int i = 0; i < blend_points_used; i++) {
+				if (i != cur_closest) {
+					blend_node(blend_points[i].node, blend_points[i].name, pi, FILTER_IGNORE, true, p_test_only);
+				}
 			}
 		}
 	}
 
-	set_parameter(this->closest, closest);
-	set_parameter(this->length_internal, length_internal);
+	set_parameter(closest, cur_closest);
 	return mind;
 }
 
@@ -592,12 +619,8 @@ bool AnimationNodeBlendSpace2D::get_auto_triangles() const {
 	return auto_triangles;
 }
 
-Ref<AnimationNode> AnimationNodeBlendSpace2D::get_child_by_name(const StringName &p_name) {
+Ref<AnimationNode> AnimationNodeBlendSpace2D::get_child_by_name(const StringName &p_name) const {
 	return get_blend_point_node(p_name.operator String().to_int());
-}
-
-void AnimationNodeBlendSpace2D::_tree_changed() {
-	emit_signal(SNAME("tree_changed"));
 }
 
 void AnimationNodeBlendSpace2D::set_blend_mode(BlendMode p_blend_mode) {
@@ -614,6 +637,18 @@ void AnimationNodeBlendSpace2D::set_use_sync(bool p_sync) {
 
 bool AnimationNodeBlendSpace2D::is_using_sync() const {
 	return sync;
+}
+
+void AnimationNodeBlendSpace2D::_tree_changed() {
+	AnimationRootNode::_tree_changed();
+}
+
+void AnimationNodeBlendSpace2D::_animation_node_renamed(const ObjectID &p_oid, const String &p_old_name, const String &p_new_name) {
+	AnimationRootNode::_animation_node_renamed(p_oid, p_old_name, p_new_name);
+}
+
+void AnimationNodeBlendSpace2D::_animation_node_removed(const ObjectID &p_oid, const StringName &p_node) {
+	AnimationRootNode::_animation_node_removed(p_oid, p_node);
 }
 
 void AnimationNodeBlendSpace2D::_bind_methods() {
@@ -658,8 +693,6 @@ void AnimationNodeBlendSpace2D::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("set_use_sync", "enable"), &AnimationNodeBlendSpace2D::set_use_sync);
 	ClassDB::bind_method(D_METHOD("is_using_sync"), &AnimationNodeBlendSpace2D::is_using_sync);
-
-	ClassDB::bind_method(D_METHOD("_update_triangles"), &AnimationNodeBlendSpace2D::_update_triangles);
 
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "auto_triangles", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR), "set_auto_triangles", "get_auto_triangles");
 

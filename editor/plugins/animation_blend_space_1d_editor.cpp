@@ -1,42 +1,50 @@
-/*************************************************************************/
-/*  animation_blend_space_1d_editor.cpp                                  */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  animation_blend_space_1d_editor.cpp                                   */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #include "animation_blend_space_1d_editor.h"
 
 #include "core/os/keyboard.h"
-#include "editor/editor_file_dialog.h"
 #include "editor/editor_node.h"
-#include "editor/editor_scale.h"
 #include "editor/editor_settings.h"
+#include "editor/editor_string_names.h"
 #include "editor/editor_undo_redo_manager.h"
+#include "editor/gui/editor_file_dialog.h"
+#include "editor/themes/editor_scale.h"
 #include "scene/animation/animation_blend_tree.h"
+#include "scene/gui/button.h"
+#include "scene/gui/check_box.h"
+#include "scene/gui/line_edit.h"
+#include "scene/gui/option_button.h"
+#include "scene/gui/panel_container.h"
+#include "scene/gui/separator.h"
+#include "scene/gui/spin_box.h"
 
 StringName AnimationNodeBlendSpace1DEditor::get_blend_position_path() const {
 	StringName path = AnimationTreeEditor::get_singleton()->get_base_path() + "blend_position";
@@ -44,6 +52,11 @@ StringName AnimationNodeBlendSpace1DEditor::get_blend_position_path() const {
 }
 
 void AnimationNodeBlendSpace1DEditor::_blend_space_gui_input(const Ref<InputEvent> &p_event) {
+	AnimationTree *tree = AnimationTreeEditor::get_singleton()->get_animation_tree();
+	if (!tree) {
+		return;
+	}
+
 	Ref<InputEventKey> k = p_event;
 
 	if (tool_select->is_pressed() && k.is_valid() && k->is_pressed() && k->get_keycode() == Key::KEY_DELETE && !k->is_echo()) {
@@ -59,7 +72,7 @@ void AnimationNodeBlendSpace1DEditor::_blend_space_gui_input(const Ref<InputEven
 
 	if (mb.is_valid() && mb->is_pressed() && ((tool_select->is_pressed() && mb->get_button_index() == MouseButton::RIGHT) || (mb->get_button_index() == MouseButton::LEFT && tool_create->is_pressed()))) {
 		if (!read_only) {
-			menu->clear();
+			menu->clear(false);
 			animations_menu->clear();
 			animations_to_add.clear();
 
@@ -67,23 +80,14 @@ void AnimationNodeBlendSpace1DEditor::_blend_space_gui_input(const Ref<InputEven
 			ClassDB::get_inheriters_from_class("AnimationRootNode", &classes);
 			classes.sort_custom<StringName::AlphCompare>();
 
-			menu->add_submenu_item(TTR("Add Animation"), "animations");
+			menu->add_submenu_node_item(TTR("Add Animation"), animations_menu);
 
-			AnimationTree *gp = AnimationTreeEditor::get_singleton()->get_tree();
-			ERR_FAIL_COND(!gp);
+			List<StringName> names;
+			tree->get_animation_list(&names);
 
-			if (gp->has_node(gp->get_animation_player())) {
-				AnimationPlayer *ap = Object::cast_to<AnimationPlayer>(gp->get_node(gp->get_animation_player()));
-
-				if (ap) {
-					List<StringName> names;
-					ap->get_animation_list(&names);
-
-					for (const StringName &E : names) {
-						animations_menu->add_icon_item(get_theme_icon(SNAME("Animation"), SNAME("EditorIcons")), E);
-						animations_to_add.push_back(E);
-					}
-				}
+			for (const StringName &E : names) {
+				animations_menu->add_icon_item(get_editor_theme_icon(SNAME("Animation")), E);
+				animations_to_add.push_back(E);
 			}
 
 			for (const StringName &E : classes) {
@@ -153,6 +157,7 @@ void AnimationNodeBlendSpace1DEditor::_blend_space_gui_input(const Ref<InputEven
 				}
 
 				updating = true;
+				EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
 				undo_redo->create_action(TTR("Move Node Point"));
 				undo_redo->add_do_method(blend_space.ptr(), "set_blend_point_position", selected_point, point);
 				undo_redo->add_undo_method(blend_space.ptr(), "set_blend_point_position", selected_point, blend_space->get_blend_point_position(selected_point));
@@ -177,7 +182,7 @@ void AnimationNodeBlendSpace1DEditor::_blend_space_gui_input(const Ref<InputEven
 		blend_pos *= blend_space->get_max_space() - blend_space->get_min_space();
 		blend_pos += blend_space->get_min_space();
 
-		AnimationTreeEditor::get_singleton()->get_tree()->set(get_blend_position_path(), blend_pos);
+		tree->set(get_blend_position_path(), blend_pos);
 		blend_space_draw->queue_redraw();
 	}
 
@@ -195,31 +200,36 @@ void AnimationNodeBlendSpace1DEditor::_blend_space_gui_input(const Ref<InputEven
 		_update_edited_point_pos();
 	}
 
-	if (mm.is_valid() && tool_blend->is_pressed() && (mm->get_button_mask() & MouseButton::MASK_LEFT) != MouseButton::NONE) {
+	if (mm.is_valid() && tool_blend->is_pressed() && (mm->get_button_mask().has_flag(MouseButtonMask::LEFT))) {
 		float blend_pos = mm->get_position().x / blend_space_draw->get_size().x;
 		blend_pos *= blend_space->get_max_space() - blend_space->get_min_space();
 		blend_pos += blend_space->get_min_space();
 
-		AnimationTreeEditor::get_singleton()->get_tree()->set(get_blend_position_path(), blend_pos);
+		tree->set(get_blend_position_path(), blend_pos);
 
 		blend_space_draw->queue_redraw();
 	}
 }
 
 void AnimationNodeBlendSpace1DEditor::_blend_space_draw() {
-	Color linecolor = get_theme_color(SNAME("font_color"), SNAME("Label"));
+	AnimationTree *tree = AnimationTreeEditor::get_singleton()->get_animation_tree();
+	if (!tree) {
+		return;
+	}
+
+	Color linecolor = get_theme_color(SceneStringName(font_color), SNAME("Label"));
 	Color linecolor_soft = linecolor;
 	linecolor_soft.a *= 0.5;
 
-	Ref<Font> font = get_theme_font(SNAME("font"), SNAME("Label"));
-	int font_size = get_theme_font_size(SNAME("font_size"), SNAME("Label"));
-	Ref<Texture2D> icon = get_theme_icon(SNAME("KeyValue"), SNAME("EditorIcons"));
-	Ref<Texture2D> icon_selected = get_theme_icon(SNAME("KeySelected"), SNAME("EditorIcons"));
+	Ref<Font> font = get_theme_font(SceneStringName(font), SNAME("Label"));
+	int font_size = get_theme_font_size(SceneStringName(font_size), SNAME("Label"));
+	Ref<Texture2D> icon = get_editor_theme_icon(SNAME("KeyValue"));
+	Ref<Texture2D> icon_selected = get_editor_theme_icon(SNAME("KeySelected"));
 
 	Size2 s = blend_space_draw->get_size();
 
 	if (blend_space_draw->has_focus()) {
-		Color color = get_theme_color(SNAME("accent_color"), SNAME("Editor"));
+		Color color = get_theme_color(SNAME("accent_color"), EditorStringName(Editor));
 		blend_space_draw->draw_rect(Rect2(Point2(), s), color, false);
 	}
 
@@ -292,13 +302,13 @@ void AnimationNodeBlendSpace1DEditor::_blend_space_draw() {
 	{
 		Color color;
 		if (tool_blend->is_pressed()) {
-			color = get_theme_color(SNAME("accent_color"), SNAME("Editor"));
+			color = get_theme_color(SNAME("accent_color"), EditorStringName(Editor));
 		} else {
 			color = linecolor;
 			color.a *= 0.5;
 		}
 
-		float point = AnimationTreeEditor::get_singleton()->get_tree()->get(get_blend_position_path());
+		float point = tree->get(get_blend_position_path());
 
 		point = (point - blend_space->get_min_space()) / (blend_space->get_max_space() - blend_space->get_min_space());
 		point *= s.width;
@@ -325,6 +335,7 @@ void AnimationNodeBlendSpace1DEditor::_update_space() {
 	min_value->set_value(blend_space->get_min_space());
 
 	sync->set_pressed(blend_space->is_using_sync());
+	interpolation->select(blend_space->get_blend_mode());
 
 	label_value->set_text(blend_space->get_value_label());
 
@@ -341,6 +352,7 @@ void AnimationNodeBlendSpace1DEditor::_config_changed(double) {
 	}
 
 	updating = true;
+	EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
 	undo_redo->create_action(TTR("Change BlendSpace1D Config"));
 	undo_redo->add_do_method(blend_space.ptr(), "set_max_space", max_value->get_value());
 	undo_redo->add_undo_method(blend_space.ptr(), "set_max_space", blend_space->get_max_space());
@@ -350,6 +362,8 @@ void AnimationNodeBlendSpace1DEditor::_config_changed(double) {
 	undo_redo->add_undo_method(blend_space.ptr(), "set_snap", blend_space->get_snap());
 	undo_redo->add_do_method(blend_space.ptr(), "set_use_sync", sync->is_pressed());
 	undo_redo->add_undo_method(blend_space.ptr(), "set_use_sync", blend_space->is_using_sync());
+	undo_redo->add_do_method(blend_space.ptr(), "set_blend_mode", interpolation->get_selected());
+	undo_redo->add_undo_method(blend_space.ptr(), "set_blend_mode", blend_space->get_blend_mode());
 	undo_redo->add_do_method(this, "_update_space");
 	undo_redo->add_undo_method(this, "_update_space");
 	undo_redo->commit_action();
@@ -364,6 +378,7 @@ void AnimationNodeBlendSpace1DEditor::_labels_changed(String) {
 	}
 
 	updating = true;
+	EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
 	undo_redo->create_action(TTR("Change BlendSpace1D Labels"), UndoRedo::MERGE_ENDS);
 	undo_redo->add_do_method(blend_space.ptr(), "set_value_label", label_value->get_text());
 	undo_redo->add_undo_method(blend_space.ptr(), "set_value_label", blend_space->get_value_label());
@@ -381,6 +396,8 @@ void AnimationNodeBlendSpace1DEditor::_file_opened(const String &p_file) {
 	file_loaded = ResourceLoader::load(p_file);
 	if (file_loaded.is_valid()) {
 		_add_menu_type(MENU_LOAD_FILE_CONFIRM);
+	} else {
+		EditorNode::get_singleton()->show_warning(TTR("This type of node can't be used. Only animation nodes are allowed."));
 	}
 }
 
@@ -404,19 +421,20 @@ void AnimationNodeBlendSpace1DEditor::_add_menu_type(int p_index) {
 		String type = menu->get_item_metadata(p_index);
 
 		Object *obj = ClassDB::instantiate(type);
-		ERR_FAIL_COND(!obj);
+		ERR_FAIL_NULL(obj);
 		AnimationNode *an = Object::cast_to<AnimationNode>(obj);
-		ERR_FAIL_COND(!an);
+		ERR_FAIL_NULL(an);
 
 		node = Ref<AnimationNode>(an);
 	}
 
-	if (!node.is_valid()) {
+	if (node.is_null()) {
 		EditorNode::get_singleton()->show_warning(TTR("This type of node can't be used. Only root nodes are allowed."));
 		return;
 	}
 
 	updating = true;
+	EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
 	undo_redo->create_action(TTR("Add Node Point"));
 	undo_redo->add_do_method(blend_space.ptr(), "add_blend_point", node, add_point_pos);
 	undo_redo->add_undo_method(blend_space.ptr(), "remove_blend_point", blend_space->get_blend_point_count());
@@ -435,6 +453,7 @@ void AnimationNodeBlendSpace1DEditor::_add_animation_type(int p_index) {
 	anim->set_animation(animations_to_add[p_index]);
 
 	updating = true;
+	EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
 	undo_redo->create_action(TTR("Add Animation Point"));
 	undo_redo->add_do_method(blend_space.ptr(), "add_blend_point", anim, add_point_pos);
 	undo_redo->add_undo_method(blend_space.ptr(), "remove_blend_point", blend_space->get_blend_point_count());
@@ -508,6 +527,7 @@ void AnimationNodeBlendSpace1DEditor::_erase_selected() {
 	if (selected_point != -1) {
 		updating = true;
 
+		EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
 		undo_redo->create_action(TTR("Remove BlendSpace1D Point"));
 		undo_redo->add_do_method(blend_space.ptr(), "remove_blend_point", selected_point);
 		undo_redo->add_undo_method(blend_space.ptr(), "add_blend_point", blend_space->get_blend_point_node(selected_point), blend_space->get_blend_point_position(selected_point), selected_point);
@@ -527,6 +547,7 @@ void AnimationNodeBlendSpace1DEditor::_edit_point_pos(double) {
 	}
 
 	updating = true;
+	EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
 	undo_redo->create_action(TTR("Move BlendSpace1D Node Point"));
 	undo_redo->add_do_method(blend_space.ptr(), "set_blend_point_position", selected_point, edit_value->get_value());
 	undo_redo->add_undo_method(blend_space.ptr(), "set_blend_point_position", selected_point, blend_space->get_blend_point_position(selected_point));
@@ -552,24 +573,33 @@ void AnimationNodeBlendSpace1DEditor::_notification(int p_what) {
 	switch (p_what) {
 		case NOTIFICATION_ENTER_TREE:
 		case NOTIFICATION_THEME_CHANGED: {
-			error_panel->add_theme_style_override("panel", get_theme_stylebox(SNAME("panel"), SNAME("Tree")));
-			error_label->add_theme_color_override("font_color", get_theme_color(SNAME("error_color"), SNAME("Editor")));
-			panel->add_theme_style_override("panel", get_theme_stylebox(SNAME("panel"), SNAME("Tree")));
-			tool_blend->set_icon(get_theme_icon(SNAME("EditPivot"), SNAME("EditorIcons")));
-			tool_select->set_icon(get_theme_icon(SNAME("ToolSelect"), SNAME("EditorIcons")));
-			tool_create->set_icon(get_theme_icon(SNAME("EditKey"), SNAME("EditorIcons")));
-			tool_erase->set_icon(get_theme_icon(SNAME("Remove"), SNAME("EditorIcons")));
-			snap->set_icon(get_theme_icon(SNAME("SnapGrid"), SNAME("EditorIcons")));
-			open_editor->set_icon(get_theme_icon(SNAME("Edit"), SNAME("EditorIcons")));
+			error_panel->add_theme_style_override(SceneStringName(panel), get_theme_stylebox(SceneStringName(panel), SNAME("Tree")));
+			error_label->add_theme_color_override(SceneStringName(font_color), get_theme_color(SNAME("error_color"), EditorStringName(Editor)));
+			panel->add_theme_style_override(SceneStringName(panel), get_theme_stylebox(SceneStringName(panel), SNAME("Tree")));
+			tool_blend->set_button_icon(get_editor_theme_icon(SNAME("EditPivot")));
+			tool_select->set_button_icon(get_editor_theme_icon(SNAME("ToolSelect")));
+			tool_create->set_button_icon(get_editor_theme_icon(SNAME("EditKey")));
+			tool_erase->set_button_icon(get_editor_theme_icon(SNAME("Remove")));
+			snap->set_button_icon(get_editor_theme_icon(SNAME("SnapGrid")));
+			open_editor->set_button_icon(get_editor_theme_icon(SNAME("Edit")));
+			interpolation->clear();
+			interpolation->add_icon_item(get_editor_theme_icon(SNAME("TrackContinuous")), TTR("Continuous"), 0);
+			interpolation->add_icon_item(get_editor_theme_icon(SNAME("TrackDiscrete")), TTR("Discrete"), 1);
+			interpolation->add_icon_item(get_editor_theme_icon(SNAME("TrackCapture")), TTR("Capture"), 2);
 		} break;
 
 		case NOTIFICATION_PROCESS: {
+			AnimationTree *tree = AnimationTreeEditor::get_singleton()->get_animation_tree();
+			if (!tree) {
+				return;
+			}
+
 			String error;
 
-			if (!AnimationTreeEditor::get_singleton()->get_tree()->is_active()) {
+			if (!tree->is_active()) {
 				error = TTR("AnimationTree is inactive.\nActivate to enable playback, check node warnings if activation fails.");
-			} else if (AnimationTreeEditor::get_singleton()->get_tree()->is_state_invalid()) {
-				error = AnimationTreeEditor::get_singleton()->get_tree()->get_invalid_state_reason();
+			} else if (tree->is_state_invalid()) {
+				error = tree->get_invalid_state_reason();
 			}
 
 			if (error != error_label->get_text()) {
@@ -604,7 +634,7 @@ void AnimationNodeBlendSpace1DEditor::edit(const Ref<AnimationNode> &p_node) {
 	blend_space = p_node;
 	read_only = false;
 
-	if (!blend_space.is_null()) {
+	if (blend_space.is_valid()) {
 		read_only = EditorNode::get_singleton()->is_resource_read_only(blend_space);
 
 		_update_space();
@@ -616,6 +646,7 @@ void AnimationNodeBlendSpace1DEditor::edit(const Ref<AnimationNode> &p_node) {
 	min_value->set_editable(!read_only);
 	max_value->set_editable(!read_only);
 	sync->set_disabled(read_only);
+	interpolation->set_disabled(read_only);
 }
 
 AnimationNodeBlendSpace1DEditor *AnimationNodeBlendSpace1DEditor::singleton = nullptr;
@@ -630,47 +661,47 @@ AnimationNodeBlendSpace1DEditor::AnimationNodeBlendSpace1DEditor() {
 	bg.instantiate();
 
 	tool_blend = memnew(Button);
-	tool_blend->set_flat(true);
+	tool_blend->set_theme_type_variation(SceneStringName(FlatButton));
 	tool_blend->set_toggle_mode(true);
 	tool_blend->set_button_group(bg);
 	top_hb->add_child(tool_blend);
 	tool_blend->set_pressed(true);
 	tool_blend->set_tooltip_text(TTR("Set the blending position within the space"));
-	tool_blend->connect("pressed", callable_mp(this, &AnimationNodeBlendSpace1DEditor::_tool_switch).bind(3));
+	tool_blend->connect(SceneStringName(pressed), callable_mp(this, &AnimationNodeBlendSpace1DEditor::_tool_switch).bind(3));
 
 	tool_select = memnew(Button);
-	tool_select->set_flat(true);
+	tool_select->set_theme_type_variation(SceneStringName(FlatButton));
 	tool_select->set_toggle_mode(true);
 	tool_select->set_button_group(bg);
 	top_hb->add_child(tool_select);
 	tool_select->set_tooltip_text(TTR("Select and move points, create points with RMB."));
-	tool_select->connect("pressed", callable_mp(this, &AnimationNodeBlendSpace1DEditor::_tool_switch).bind(0));
+	tool_select->connect(SceneStringName(pressed), callable_mp(this, &AnimationNodeBlendSpace1DEditor::_tool_switch).bind(0));
 
 	tool_create = memnew(Button);
-	tool_create->set_flat(true);
+	tool_create->set_theme_type_variation(SceneStringName(FlatButton));
 	tool_create->set_toggle_mode(true);
 	tool_create->set_button_group(bg);
 	top_hb->add_child(tool_create);
 	tool_create->set_tooltip_text(TTR("Create points."));
-	tool_create->connect("pressed", callable_mp(this, &AnimationNodeBlendSpace1DEditor::_tool_switch).bind(1));
+	tool_create->connect(SceneStringName(pressed), callable_mp(this, &AnimationNodeBlendSpace1DEditor::_tool_switch).bind(1));
 
 	tool_erase_sep = memnew(VSeparator);
 	top_hb->add_child(tool_erase_sep);
 	tool_erase = memnew(Button);
-	tool_erase->set_flat(true);
+	tool_erase->set_theme_type_variation(SceneStringName(FlatButton));
 	top_hb->add_child(tool_erase);
 	tool_erase->set_tooltip_text(TTR("Erase points."));
-	tool_erase->connect("pressed", callable_mp(this, &AnimationNodeBlendSpace1DEditor::_erase_selected));
+	tool_erase->connect(SceneStringName(pressed), callable_mp(this, &AnimationNodeBlendSpace1DEditor::_erase_selected));
 
 	top_hb->add_child(memnew(VSeparator));
 
 	snap = memnew(Button);
-	snap->set_flat(true);
+	snap->set_theme_type_variation(SceneStringName(FlatButton));
 	snap->set_toggle_mode(true);
 	top_hb->add_child(snap);
 	snap->set_pressed(true);
 	snap->set_tooltip_text(TTR("Enable snap and show grid."));
-	snap->connect("pressed", callable_mp(this, &AnimationNodeBlendSpace1DEditor::_snap_toggled));
+	snap->connect(SceneStringName(pressed), callable_mp(this, &AnimationNodeBlendSpace1DEditor::_snap_toggled));
 
 	snap_value = memnew(SpinBox);
 	top_hb->add_child(snap_value);
@@ -682,7 +713,14 @@ AnimationNodeBlendSpace1DEditor::AnimationNodeBlendSpace1DEditor() {
 	top_hb->add_child(memnew(Label(TTR("Sync:"))));
 	sync = memnew(CheckBox);
 	top_hb->add_child(sync);
-	sync->connect("toggled", callable_mp(this, &AnimationNodeBlendSpace1DEditor::_config_changed));
+	sync->connect(SceneStringName(toggled), callable_mp(this, &AnimationNodeBlendSpace1DEditor::_config_changed));
+
+	top_hb->add_child(memnew(VSeparator));
+
+	top_hb->add_child(memnew(Label(TTR("Blend:"))));
+	interpolation = memnew(OptionButton);
+	top_hb->add_child(interpolation);
+	interpolation->connect(SceneStringName(item_selected), callable_mp(this, &AnimationNodeBlendSpace1DEditor::_config_changed));
 
 	edit_hb = memnew(HBoxContainer);
 	top_hb->add_child(edit_hb);
@@ -694,12 +732,12 @@ AnimationNodeBlendSpace1DEditor::AnimationNodeBlendSpace1DEditor() {
 	edit_value->set_min(-1000);
 	edit_value->set_max(1000);
 	edit_value->set_step(0.01);
-	edit_value->connect("value_changed", callable_mp(this, &AnimationNodeBlendSpace1DEditor::_edit_point_pos));
+	edit_value->connect(SceneStringName(value_changed), callable_mp(this, &AnimationNodeBlendSpace1DEditor::_edit_point_pos));
 
 	open_editor = memnew(Button);
 	edit_hb->add_child(open_editor);
 	open_editor->set_text(TTR("Open Editor"));
-	open_editor->connect("pressed", callable_mp(this, &AnimationNodeBlendSpace1DEditor::_open_editor), CONNECT_DEFERRED);
+	open_editor->connect(SceneStringName(pressed), callable_mp(this, &AnimationNodeBlendSpace1DEditor::_open_editor), CONNECT_DEFERRED);
 
 	edit_hb->hide();
 	open_editor->hide();
@@ -715,8 +753,8 @@ AnimationNodeBlendSpace1DEditor::AnimationNodeBlendSpace1DEditor() {
 	panel->set_v_size_flags(SIZE_EXPAND_FILL);
 
 	blend_space_draw = memnew(Control);
-	blend_space_draw->connect("gui_input", callable_mp(this, &AnimationNodeBlendSpace1DEditor::_blend_space_gui_input));
-	blend_space_draw->connect("draw", callable_mp(this, &AnimationNodeBlendSpace1DEditor::_blend_space_draw));
+	blend_space_draw->connect(SceneStringName(gui_input), callable_mp(this, &AnimationNodeBlendSpace1DEditor::_blend_space_gui_input));
+	blend_space_draw->connect(SceneStringName(draw), callable_mp(this, &AnimationNodeBlendSpace1DEditor::_blend_space_draw));
 	blend_space_draw->set_focus_mode(FOCUS_ALL);
 
 	panel->add_child(blend_space_draw);
@@ -748,27 +786,24 @@ AnimationNodeBlendSpace1DEditor::AnimationNodeBlendSpace1DEditor() {
 		bottom_hb->add_child(max_value);
 	}
 
-	snap_value->connect("value_changed", callable_mp(this, &AnimationNodeBlendSpace1DEditor::_config_changed));
-	min_value->connect("value_changed", callable_mp(this, &AnimationNodeBlendSpace1DEditor::_config_changed));
-	max_value->connect("value_changed", callable_mp(this, &AnimationNodeBlendSpace1DEditor::_config_changed));
-	label_value->connect("text_changed", callable_mp(this, &AnimationNodeBlendSpace1DEditor::_labels_changed));
+	snap_value->connect(SceneStringName(value_changed), callable_mp(this, &AnimationNodeBlendSpace1DEditor::_config_changed));
+	min_value->connect(SceneStringName(value_changed), callable_mp(this, &AnimationNodeBlendSpace1DEditor::_config_changed));
+	max_value->connect(SceneStringName(value_changed), callable_mp(this, &AnimationNodeBlendSpace1DEditor::_config_changed));
+	label_value->connect(SceneStringName(text_changed), callable_mp(this, &AnimationNodeBlendSpace1DEditor::_labels_changed));
 
 	error_panel = memnew(PanelContainer);
 	add_child(error_panel);
 
 	error_label = memnew(Label);
 	error_panel->add_child(error_label);
-	error_label->set_text("hmmm");
-
-	undo_redo = EditorNode::get_undo_redo();
 
 	menu = memnew(PopupMenu);
 	add_child(menu);
-	menu->connect("id_pressed", callable_mp(this, &AnimationNodeBlendSpace1DEditor::_add_menu_type));
+	menu->connect(SceneStringName(id_pressed), callable_mp(this, &AnimationNodeBlendSpace1DEditor::_add_menu_type));
 
 	animations_menu = memnew(PopupMenu);
+	animations_menu->set_auto_translate_mode(AUTO_TRANSLATE_MODE_DISABLED);
 	menu->add_child(animations_menu);
-	animations_menu->set_name("animations");
 	animations_menu->connect("index_pressed", callable_mp(this, &AnimationNodeBlendSpace1DEditor::_add_animation_type));
 
 	open_file = memnew(EditorFileDialog);
@@ -776,7 +811,6 @@ AnimationNodeBlendSpace1DEditor::AnimationNodeBlendSpace1DEditor() {
 	open_file->set_title(TTR("Open Animation Node"));
 	open_file->set_file_mode(EditorFileDialog::FILE_MODE_OPEN_FILE);
 	open_file->connect("file_selected", callable_mp(this, &AnimationNodeBlendSpace1DEditor::_file_opened));
-	undo_redo = EditorNode::get_undo_redo();
 
 	set_custom_minimum_size(Size2(0, 150 * EDSCALE));
 }

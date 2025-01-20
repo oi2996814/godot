@@ -4,8 +4,8 @@
 # To use it, install this file in `/etc/bash_completion.d` then restart your shell.
 # You can also `source` this file directly in your shell startup file.
 #
-# Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.
-# Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).
+# Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md).
+# Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -46,6 +46,7 @@ _complete_godot_options() {
 --remote-fs
 --remote-fs-password
 --audio-driver
+--audio-output-latency
 --display-driver
 --rendering-method
 --rendering-driver
@@ -53,6 +54,8 @@ _complete_godot_options() {
 --text-driver
 --tablet-driver
 --headless
+--log-file
+--write-movie
 --fullscreen
 --maximized
 --windowed
@@ -60,6 +63,7 @@ _complete_godot_options() {
 --resolution
 --position
 --single-window
+--xr-mode
 --debug
 --breakpoints
 --profiling
@@ -70,15 +74,17 @@ _complete_godot_options() {
 --debug-collisions
 --debug-navigation
 --debug-stringnames
+--max-fps
 --frame-delay
 --time-scale
+--disable-vsync
 --disable-render-loop
 --disable-crash-handler
 --fixed-fps
 --print-fps
 --script
 --check-only
---export
+--export-release
 --export-debug
 --export-pack
 --convert-3to4
@@ -86,7 +92,10 @@ _complete_godot_options() {
 --doctool
 --no-docbase
 --build-solutions
+--dump-gdextension-interface
 --dump-extension-api
+--benchmark
+--benchmark-file
 --test
 " -- "$1"))
 }
@@ -120,6 +129,10 @@ _complete_godot_bash() {
     local IFS=$' \n\t'
     # shellcheck disable=SC2207
     COMPREPLY=($(compgen -W "vulkan opengl3 dummy" -- "$cur"))
+	elif [[ $prev == "--xr-mode" ]]; then
+    local IFS=$' \n\t'
+    # shellcheck disable=SC2207
+    COMPREPLY=($(compgen -W "default off on" -- "$cur"))
   elif [[ $prev == "--path" || $prev == "--doctool" ]]; then
     local IFS=$'\n\t'
     # shellcheck disable=SC2207

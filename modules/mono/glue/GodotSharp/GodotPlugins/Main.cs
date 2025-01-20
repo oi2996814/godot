@@ -21,6 +21,13 @@ namespace GodotPlugins
         private sealed class PluginLoadContextWrapper
         {
             private PluginLoadContext? _pluginLoadContext;
+            private readonly WeakReference _weakReference;
+
+            private PluginLoadContextWrapper(PluginLoadContext pluginLoadContext, WeakReference weakReference)
+            {
+                _pluginLoadContext = pluginLoadContext;
+                _weakReference = weakReference;
+            }
 
             public string? AssemblyLoadedPath
             {
@@ -28,25 +35,33 @@ namespace GodotPlugins
                 get => _pluginLoadContext?.AssemblyLoadedPath;
             }
 
+            public bool IsCollectible
+            {
+                [MethodImpl(MethodImplOptions.NoInlining)]
+                // if _pluginLoadContext is null we already started unloading, so it was collectible
+                get => _pluginLoadContext?.IsCollectible ?? true;
+            }
+
+            public bool IsAlive
+            {
+                [MethodImpl(MethodImplOptions.NoInlining)]
+                get => _weakReference.IsAlive;
+            }
+
             [MethodImpl(MethodImplOptions.NoInlining)]
             public static (Assembly, PluginLoadContextWrapper) CreateAndLoadFromAssemblyName(
                 AssemblyName assemblyName,
                 string pluginPath,
                 ICollection<string> sharedAssemblies,
-                AssemblyLoadContext mainLoadContext
+                AssemblyLoadContext mainLoadContext,
+                bool isCollectible
             )
             {
-                var wrapper = new PluginLoadContextWrapper();
-                wrapper._pluginLoadContext = new PluginLoadContext(
-                    pluginPath, sharedAssemblies, mainLoadContext);
-                var assembly = wrapper._pluginLoadContext.LoadFromAssemblyName(assemblyName);
+                var context = new PluginLoadContext(pluginPath, sharedAssemblies, mainLoadContext, isCollectible);
+                var reference = new WeakReference(context, trackResurrection: true);
+                var wrapper = new PluginLoadContextWrapper(context, reference);
+                var assembly = context.LoadFromAssemblyName(assemblyName);
                 return (assembly, wrapper);
-            }
-
-            [MethodImpl(MethodImplOptions.NoInlining)]
-            public WeakReference CreateWeakReference()
-            {
-                return new WeakReference(_pluginLoadContext, trackResurrection: true);
             }
 
             [MethodImpl(MethodImplOptions.NoInlining)]
@@ -58,9 +73,10 @@ namespace GodotPlugins
         }
 
         private static readonly List<AssemblyName> SharedAssemblies = new();
-        private static readonly Assembly CoreApiAssembly = typeof(Godot.Object).Assembly;
+        private static readonly Assembly CoreApiAssembly = typeof(global::Godot.GodotObject).Assembly;
         private static Assembly? _editorApiAssembly;
         private static PluginLoadContextWrapper? _projectLoadContext;
+        private static bool _editorHint = false;
 
         private static readonly AssemblyLoadContext MainLoadContext =
             AssemblyLoadContext.GetLoadContext(Assembly.GetExecutingAssembly()) ??
@@ -77,15 +93,17 @@ namespace GodotPlugins
         {
             try
             {
+                _editorHint = editorHint.ToBool();
+
                 _dllImportResolver = new GodotDllImportResolver(godotDllHandle).OnResolveDllImport;
 
                 SharedAssemblies.Add(CoreApiAssembly.GetName());
                 NativeLibrary.SetDllImportResolver(CoreApiAssembly, _dllImportResolver);
 
-                AlcReloadCfg.Configure(alcReloadEnabled: editorHint.ToBool());
+                AlcReloadCfg.Configure(alcReloadEnabled: _editorHint);
                 NativeFuncs.Initialize(unmanagedCallbacks, unmanagedCallbacksSize);
 
-                if (editorHint.ToBool())
+                if (_editorHint)
                 {
                     _editorApiAssembly = Assembly.Load("GodotSharpEditor");
                     SharedAssemblies.Add(_editorApiAssembly.GetName());
@@ -128,7 +146,7 @@ namespace GodotPlugins
 
                 string assemblyPath = new(nAssemblyPath);
 
-                (var projectAssembly, _projectLoadContext) = LoadPlugin(assemblyPath);
+                (var projectAssembly, _projectLoadContext) = LoadPlugin(assemblyPath, isCollectible: _editorHint);
 
                 string loadedAssemblyPath = _projectLoadContext.AssemblyLoadedPath ?? assemblyPath;
                 *outLoadedAssemblyPath = Marshaling.ConvertStringToNative(loadedAssemblyPath);
@@ -155,7 +173,7 @@ namespace GodotPlugins
                 if (_editorApiAssembly == null)
                     throw new InvalidOperationException("The Godot editor API assembly is not loaded.");
 
-                var (assembly, _) = LoadPlugin(assemblyPath);
+                var (assembly, _) = LoadPlugin(assemblyPath, isCollectible: false);
 
                 NativeLibrary.SetDllImportResolver(assembly, _dllImportResolver!);
 
@@ -180,7 +198,7 @@ namespace GodotPlugins
             }
         }
 
-        private static (Assembly, PluginLoadContextWrapper) LoadPlugin(string assemblyPath)
+        private static (Assembly, PluginLoadContextWrapper) LoadPlugin(string assemblyPath, bool isCollectible)
         {
             string assemblyName = Path.GetFileNameWithoutExtension(assemblyPath);
 
@@ -194,7 +212,7 @@ namespace GodotPlugins
             }
 
             return PluginLoadContextWrapper.CreateAndLoadFromAssemblyName(
-                new AssemblyName(assemblyName), assemblyPath, sharedAssemblies, MainLoadContext);
+                new AssemblyName(assemblyName), assemblyPath, sharedAssemblies, MainLoadContext, isCollectible);
         }
 
         [UnmanagedCallersOnly]
@@ -218,34 +236,37 @@ namespace GodotPlugins
                 if (pluginLoadContext == null)
                     return true;
 
+                if (!pluginLoadContext.IsCollectible)
+                {
+                    Console.Error.WriteLine("Cannot unload a non-collectible assembly load context.");
+                    return false;
+                }
+
                 Console.WriteLine("Unloading assembly load context...");
 
-                var alcWeakReference = pluginLoadContext.CreateWeakReference();
-
                 pluginLoadContext.Unload();
-                pluginLoadContext = null;
 
                 int startTimeMs = Environment.TickCount;
                 bool takingTooLong = false;
 
-                while (alcWeakReference.IsAlive)
+                while (pluginLoadContext.IsAlive)
                 {
                     GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced);
                     GC.WaitForPendingFinalizers();
 
-                    if (!alcWeakReference.IsAlive)
+                    if (!pluginLoadContext.IsAlive)
                         break;
 
                     int elapsedTimeMs = Environment.TickCount - startTimeMs;
 
-                    if (!takingTooLong && elapsedTimeMs >= 2000)
+                    if (!takingTooLong && elapsedTimeMs >= 200)
                     {
                         takingTooLong = true;
 
                         // TODO: How to log from GodotPlugins? (delegate pointer?)
                         Console.Error.WriteLine("Assembly unloading is taking longer than expected...");
                     }
-                    else if (elapsedTimeMs >= 5000)
+                    else if (elapsedTimeMs >= 1000)
                     {
                         // TODO: How to log from GodotPlugins? (delegate pointer?)
                         Console.Error.WriteLine(
@@ -257,6 +278,7 @@ namespace GodotPlugins
 
                 Console.WriteLine("Assembly load context unloaded successfully.");
 
+                pluginLoadContext = null;
                 return true;
             }
             catch (Exception e)

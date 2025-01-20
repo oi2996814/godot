@@ -1,32 +1,32 @@
-/*************************************************************************/
-/*  test_rect2.h                                                         */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  test_rect2.h                                                          */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #ifndef TEST_RECT2_H
 #define TEST_RECT2_H
@@ -57,7 +57,7 @@ TEST_CASE("[Rect2] Constructor methods") {
 TEST_CASE("[Rect2] String conversion") {
 	// Note: This also depends on the Vector2 string representation.
 	CHECK_MESSAGE(
-			String(Rect2(0, 100, 1280, 720)) == "[P: (0, 100), S: (1280, 720)]",
+			String(Rect2(0, 100, 1280, 720)) == "[P: (0.0, 100.0), S: (1280.0, 720.0)]",
 			"The string representation should match the expected value.");
 }
 
@@ -102,16 +102,16 @@ TEST_CASE("[Rect2] Basic setters") {
 
 TEST_CASE("[Rect2] Area getters") {
 	CHECK_MESSAGE(
-			Math::is_equal_approx(Rect2(0, 100, 1280, 720).get_area(), 921'600),
+			Rect2(0, 100, 1280, 720).get_area() == doctest::Approx(921'600),
 			"get_area() should return the expected value.");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(Rect2(0, 100, -1280, -720).get_area(), 921'600),
+			Rect2(0, 100, -1280, -720).get_area() == doctest::Approx(921'600),
 			"get_area() should return the expected value.");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(Rect2(0, 100, 1280, -720).get_area(), -921'600),
+			Rect2(0, 100, 1280, -720).get_area() == doctest::Approx(-921'600),
 			"get_area() should return the expected value.");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(Rect2(0, 100, -1280, 720).get_area(), -921'600),
+			Rect2(0, 100, -1280, 720).get_area() == doctest::Approx(-921'600),
 			"get_area() should return the expected value.");
 	CHECK_MESSAGE(
 			Math::is_zero_approx(Rect2(0, 100, 0, 720).get_area()),
@@ -178,6 +178,28 @@ TEST_CASE("[Rect2] Expanding") {
 	CHECK_MESSAGE(
 			Rect2(0, 100, 1280, 720).expand(Vector2(0, 0)).is_equal_approx(Rect2(0, 0, 1280, 820)),
 			"expand() with non-contained Vector2 should return the expected result.");
+}
+
+TEST_CASE("[Rect2] Get support") {
+	const Rect2 rect = Rect2(Vector2(-1.5, 2), Vector2(4, 5));
+	CHECK_MESSAGE(
+			rect.get_support(Vector2(1, 0)) == Vector2(2.5, 2),
+			"get_support() should return the expected value.");
+	CHECK_MESSAGE(
+			rect.get_support(Vector2(0.5, 1)) == Vector2(2.5, 7),
+			"get_support() should return the expected value.");
+	CHECK_MESSAGE(
+			rect.get_support(Vector2(0.5, 1)) == Vector2(2.5, 7),
+			"get_support() should return the expected value.");
+	CHECK_MESSAGE(
+			rect.get_support(Vector2(0, -1)) == Vector2(-1.5, 2),
+			"get_support() should return the expected value.");
+	CHECK_MESSAGE(
+			rect.get_support(Vector2(0, -0.1)) == Vector2(-1.5, 2),
+			"get_support() should return the expected value.");
+	CHECK_MESSAGE(
+			rect.get_support(Vector2()) == Vector2(-1.5, 2),
+			"get_support() should return the Rect2 position when given a zero vector.");
 }
 
 TEST_CASE("[Rect2] Growing") {
@@ -300,6 +322,27 @@ TEST_CASE("[Rect2] Merging") {
 			Rect2(0, 100, 1280, 720).merge(Rect2(-4000, -4000, 100, 100)).is_equal_approx(Rect2(-4000, -4000, 5280, 4820)),
 			"merge() with non-enclosed Rect2 should return the expected result.");
 }
+
+TEST_CASE("[Rect2] Finite number checks") {
+	const Vector2 x(0, 1);
+	const Vector2 infinite(NAN, NAN);
+
+	CHECK_MESSAGE(
+			Rect2(x, x).is_finite(),
+			"Rect2 with all components finite should be finite");
+
+	CHECK_FALSE_MESSAGE(
+			Rect2(infinite, x).is_finite(),
+			"Rect2 with one component infinite should not be finite.");
+	CHECK_FALSE_MESSAGE(
+			Rect2(x, infinite).is_finite(),
+			"Rect2 with one component infinite should not be finite.");
+
+	CHECK_FALSE_MESSAGE(
+			Rect2(infinite, infinite).is_finite(),
+			"Rect2 with two components infinite should not be finite.");
+}
+
 } // namespace TestRect2
 
 #endif // TEST_RECT2_H

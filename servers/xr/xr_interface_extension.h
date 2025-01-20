@@ -1,32 +1,32 @@
-/*************************************************************************/
-/*  xr_interface_extension.h                                             */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  xr_interface_extension.h                                              */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #ifndef XR_INTERFACE_EXTENSION_H
 #define XR_INTERFACE_EXTENSION_H
@@ -57,10 +57,12 @@ public:
 	virtual bool is_initialized() const override;
 	virtual bool initialize() override;
 	virtual void uninitialize() override;
+	virtual Dictionary get_system_info() override;
 
 	GDVIRTUAL0RC(bool, _is_initialized);
 	GDVIRTUAL0R(bool, _initialize);
 	GDVIRTUAL0(_uninitialize);
+	GDVIRTUAL0RC(Dictionary, _get_system_info);
 
 	/** input and output **/
 
@@ -71,7 +73,7 @@ public:
 
 	GDVIRTUAL0RC(PackedStringArray, _get_suggested_tracker_names);
 	GDVIRTUAL1RC(PackedStringArray, _get_suggested_pose_names, const StringName &);
-	GDVIRTUAL0RC(uint32_t, _get_tracking_status);
+	GDVIRTUAL0RC(XRInterface::TrackingStatus, _get_tracking_status);
 	GDVIRTUAL6(_trigger_haptic_pulse, const String &, const StringName &, double, double, double, double);
 
 	/** specific to VR **/
@@ -81,8 +83,8 @@ public:
 	virtual PackedVector3Array get_play_area() const override; /* if available, returns an array of vectors denoting the play area the player can move around in */
 
 	GDVIRTUAL1RC(bool, _supports_play_area_mode, XRInterface::PlayAreaMode);
-	GDVIRTUAL0RC(uint32_t, _get_play_area_mode);
-	GDVIRTUAL1RC(bool, _set_play_area_mode, uint32_t);
+	GDVIRTUAL0RC(XRInterface::PlayAreaMode, _get_play_area_mode);
+	GDVIRTUAL1RC(bool, _set_play_area_mode, XRInterface::PlayAreaMode);
 	GDVIRTUAL0RC(PackedVector3Array, _get_play_area);
 
 	/** specific to AR **/
@@ -123,15 +125,12 @@ public:
 	virtual bool pre_draw_viewport(RID p_render_target) override;
 	virtual Vector<BlitToScreen> post_draw_viewport(RID p_render_target, const Rect2 &p_screen_rect) override;
 	virtual void end_frame() override;
-	virtual void notification(int p_what) override;
 
 	GDVIRTUAL0(_process);
 	GDVIRTUAL0(_pre_render);
 	GDVIRTUAL1R(bool, _pre_draw_viewport, RID);
 	GDVIRTUAL2(_post_draw_viewport, RID, const Rect2 &);
 	GDVIRTUAL0(_end_frame);
-
-	GDVIRTUAL1(_notification, int);
 
 	/* access to some internals we need */
 	RID get_render_target_texture(RID p_render_target);

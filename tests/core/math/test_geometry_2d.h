@@ -1,32 +1,32 @@
-/*************************************************************************/
-/*  test_geometry_2d.h                                                   */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  test_geometry_2d.h                                                    */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #ifndef TEST_GEOMETRY_2D_H
 #define TEST_GEOMETRY_2D_H
@@ -64,7 +64,7 @@ TEST_CASE("[Geometry2D] Point in triangle") {
 
 	// This tests points on the edge of the triangle. They are treated as being outside the triangle.
 	// In `is_point_in_circle` and `is_point_in_polygon` they are treated as being inside, so in order the make
-	// the behaviour consistent this may change in the future (see issue #44717 and PR #44274).
+	// the behavior consistent this may change in the future (see issue #44717 and PR #44274).
 	CHECK_FALSE(Geometry2D::is_point_in_triangle(Vector2(1, 1), Vector2(-1, 1), Vector2(0, -1), Vector2(1, 1)));
 	CHECK_FALSE(Geometry2D::is_point_in_triangle(Vector2(0, 1), Vector2(-1, 1), Vector2(0, -1), Vector2(1, 1)));
 }
@@ -171,43 +171,43 @@ TEST_CASE("[Geometry2D] Segment intersection with circle") {
 	real_t one = 1.0;
 
 	CHECK_MESSAGE(
-			Math::is_equal_approx(Geometry2D::segment_intersects_circle(Vector2(0, 0), Vector2(4, 0), Vector2(0, 0), 1.0), one_quarter),
+			Geometry2D::segment_intersects_circle(Vector2(0, 0), Vector2(4, 0), Vector2(0, 0), 1.0) == doctest::Approx(one_quarter),
 			"Segment from inside to outside of circle should intersect it.");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(Geometry2D::segment_intersects_circle(Vector2(4, 0), Vector2(0, 0), Vector2(0, 0), 1.0), three_quarters),
+			Geometry2D::segment_intersects_circle(Vector2(4, 0), Vector2(0, 0), Vector2(0, 0), 1.0) == doctest::Approx(three_quarters),
 			"Segment from outside to inside of circle should intersect it.");
 
 	CHECK_MESSAGE(
-			Math::is_equal_approx(Geometry2D::segment_intersects_circle(Vector2(-2, 0), Vector2(2, 0), Vector2(0, 0), 1.0), one_quarter),
+			Geometry2D::segment_intersects_circle(Vector2(-2, 0), Vector2(2, 0), Vector2(0, 0), 1.0) == doctest::Approx(one_quarter),
 			"Segment running through circle should intersect it.");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(Geometry2D::segment_intersects_circle(Vector2(2, 0), Vector2(-2, 0), Vector2(0, 0), 1.0), one_quarter),
+			Geometry2D::segment_intersects_circle(Vector2(2, 0), Vector2(-2, 0), Vector2(0, 0), 1.0) == doctest::Approx(one_quarter),
 			"Segment running through circle should intersect it.");
 
 	CHECK_MESSAGE(
-			Math::is_equal_approx(Geometry2D::segment_intersects_circle(Vector2(0, 0), Vector2(1, 0), Vector2(0, 0), 1.0), one),
+			Geometry2D::segment_intersects_circle(Vector2(0, 0), Vector2(1, 0), Vector2(0, 0), 1.0) == doctest::Approx(one),
 			"Segment starting inside the circle and ending on the circle should intersect it");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(Geometry2D::segment_intersects_circle(Vector2(1, 0), Vector2(0, 0), Vector2(0, 0), 1.0), zero),
+			Geometry2D::segment_intersects_circle(Vector2(1, 0), Vector2(0, 0), Vector2(0, 0), 1.0) == doctest::Approx(zero),
 			"Segment starting on the circle and going inwards should intersect it");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(Geometry2D::segment_intersects_circle(Vector2(1, 0), Vector2(2, 0), Vector2(0, 0), 1.0), zero),
+			Geometry2D::segment_intersects_circle(Vector2(1, 0), Vector2(2, 0), Vector2(0, 0), 1.0) == doctest::Approx(zero),
 			"Segment starting on the circle and going outwards should intersect it");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(Geometry2D::segment_intersects_circle(Vector2(2, 0), Vector2(1, 0), Vector2(0, 0), 1.0), one),
+			Geometry2D::segment_intersects_circle(Vector2(2, 0), Vector2(1, 0), Vector2(0, 0), 1.0) == doctest::Approx(one),
 			"Segment starting outside the circle and ending on the circle intersect it");
 
 	CHECK_MESSAGE(
-			Math::is_equal_approx(Geometry2D::segment_intersects_circle(Vector2(-1, 0), Vector2(1, 0), Vector2(0, 0), 2.0), minus_one),
+			Geometry2D::segment_intersects_circle(Vector2(-1, 0), Vector2(1, 0), Vector2(0, 0), 2.0) == doctest::Approx(minus_one),
 			"Segment completely within the circle should not intersect it");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(Geometry2D::segment_intersects_circle(Vector2(1, 0), Vector2(-1, 0), Vector2(0, 0), 2.0), minus_one),
+			Geometry2D::segment_intersects_circle(Vector2(1, 0), Vector2(-1, 0), Vector2(0, 0), 2.0) == doctest::Approx(minus_one),
 			"Segment completely within the circle should not intersect it");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(Geometry2D::segment_intersects_circle(Vector2(2, 0), Vector2(3, 0), Vector2(0, 0), 1.0), minus_one),
+			Geometry2D::segment_intersects_circle(Vector2(2, 0), Vector2(3, 0), Vector2(0, 0), 1.0) == doctest::Approx(minus_one),
 			"Segment completely outside the circle should not intersect it");
 	CHECK_MESSAGE(
-			Math::is_equal_approx(Geometry2D::segment_intersects_circle(Vector2(3, 0), Vector2(2, 0), Vector2(0, 0), 1.0), minus_one),
+			Geometry2D::segment_intersects_circle(Vector2(3, 0), Vector2(2, 0), Vector2(0, 0), 1.0) == doctest::Approx(minus_one),
 			"Segment completely outside the circle should not intersect it");
 }
 
@@ -282,41 +282,67 @@ TEST_CASE("[Geometry2D] Closest point to uncapped segment") {
 
 TEST_CASE("[Geometry2D] Closest points between segments") {
 	Vector2 c1, c2;
-	Geometry2D::get_closest_points_between_segments(Vector2(2, 2), Vector2(3, 3), Vector2(4, 4), Vector2(4, 5), c1, c2);
-	CHECK(c1.is_equal_approx(Vector2(3, 3)));
-	CHECK(c2.is_equal_approx(Vector2(4, 4)));
+	// Basis Path Testing suite
+	SUBCASE("[Geometry2D] Both segments degenerate to a point") {
+		Geometry2D::get_closest_points_between_segments(Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), Vector2(0, 0), c1, c2);
+		CHECK(c1.is_equal_approx(Vector2(0, 0)));
+		CHECK(c2.is_equal_approx(Vector2(0, 0)));
+	}
 
-	Geometry2D::get_closest_points_between_segments(Vector2(0, 1), Vector2(-2, -1), Vector2(0, 0), Vector2(2, -2), c1, c2);
-	CHECK(c1.is_equal_approx(Vector2(-0.5, 0.5)));
-	CHECK(c2.is_equal_approx(Vector2(0, 0)));
+	SUBCASE("[Geometry2D] Closest point on second segment trajectory is above [0,1]") {
+		Geometry2D::get_closest_points_between_segments(Vector2(50, -25), Vector2(50, -10), Vector2(-50, 10), Vector2(-40, 10), c1, c2);
+		CHECK(c1.is_equal_approx(Vector2(50, -10)));
+		CHECK(c2.is_equal_approx(Vector2(-40, 10)));
+	}
 
-	Geometry2D::get_closest_points_between_segments(Vector2(-1, 1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, -1), c1, c2);
-	CHECK(c1.is_equal_approx(Vector2(0, 0)));
-	CHECK(c2.is_equal_approx(Vector2(0, 0)));
+	SUBCASE("[Geometry2D] Parallel segments") {
+		Geometry2D::get_closest_points_between_segments(Vector2(2, 1), Vector2(4, 3), Vector2(2, 3), Vector2(4, 5), c1, c2);
+		CHECK(c1.is_equal_approx(Vector2(3, 2)));
+		CHECK(c2.is_equal_approx(Vector2(2, 3)));
+	}
 
-	Geometry2D::get_closest_points_between_segments(Vector2(-3, 4), Vector2(-3, 4), Vector2(-4, 3), Vector2(-2, 3), c1, c2);
-	CHECK_MESSAGE(
-			c1.is_equal_approx(Vector2(-3, 4)),
-			"1st line segment is only a point, this point should be the closest point to the 2nd line segment.");
-	CHECK_MESSAGE(
-			c2.is_equal_approx(Vector2(-3, 3)),
-			"1st line segment is only a point, this should not matter when determining the closest point on the 2nd line segment.");
+	SUBCASE("[Geometry2D] Closest point on second segment trajectory is within [0,1]") {
+		Geometry2D::get_closest_points_between_segments(Vector2(2, 4), Vector2(2, 3), Vector2(1, 1), Vector2(4, 4), c1, c2);
+		CHECK(c1.is_equal_approx(Vector2(2, 3)));
+		CHECK(c2.is_equal_approx(Vector2(2.5, 2.5)));
+	}
 
-	Geometry2D::get_closest_points_between_segments(Vector2(-4, 3), Vector2(-2, 3), Vector2(-3, 4), Vector2(-3, 4), c1, c2);
-	CHECK_MESSAGE(
-			c1.is_equal_approx(Vector2(-3, 3)),
-			"2nd line segment is only a point, this should not matter when determining the closest point on the 1st line segment.");
-	CHECK_MESSAGE(
-			c2.is_equal_approx(Vector2(-3, 4)),
-			"2nd line segment is only a point, this point should be the closest point to the 1st line segment.");
+	SUBCASE("[Geometry2D] Closest point on second segment trajectory is below [0,1]") {
+		Geometry2D::get_closest_points_between_segments(Vector2(-20, -20), Vector2(-10, -40), Vector2(10, 25), Vector2(25, 40), c1, c2);
+		CHECK(c1.is_equal_approx(Vector2(-20, -20)));
+		CHECK(c2.is_equal_approx(Vector2(10, 25)));
+	}
 
-	Geometry2D::get_closest_points_between_segments(Vector2(5, -4), Vector2(5, -4), Vector2(-2, 1), Vector2(-2, 1), c1, c2);
-	CHECK_MESSAGE(
-			c1.is_equal_approx(Vector2(5, -4)),
-			"Both line segments are only a point. On the 1st line segment, that point should be the closest point to the 2nd line segment.");
-	CHECK_MESSAGE(
-			c2.is_equal_approx(Vector2(-2, 1)),
-			"Both line segments are only a point. On the 2nd line segment, that point should be the closest point to the 1st line segment.");
+	SUBCASE("[Geometry2D] Second segment degenerates to a point") {
+		Geometry2D::get_closest_points_between_segments(Vector2(1, 2), Vector2(2, 1), Vector2(3, 3), Vector2(3, 3), c1, c2);
+		CHECK(c1.is_equal_approx(Vector2(1.5, 1.5)));
+		CHECK(c2.is_equal_approx(Vector2(3, 3)));
+	}
+
+	SUBCASE("[Geometry2D] First segment degenerates to a point") {
+		Geometry2D::get_closest_points_between_segments(Vector2(1, 1), Vector2(1, 1), Vector2(2, 2), Vector2(4, 4), c1, c2);
+		CHECK(c1.is_equal_approx(Vector2(1, 1)));
+		CHECK(c2.is_equal_approx(Vector2(2, 2)));
+	}
+	// End Basis Path Testing suite
+
+	SUBCASE("[Geometry2D] Segments are equal vectors") {
+		Geometry2D::get_closest_points_between_segments(Vector2(2, 2), Vector2(3, 3), Vector2(4, 4), Vector2(4, 5), c1, c2);
+		CHECK(c1.is_equal_approx(Vector2(3, 3)));
+		CHECK(c2.is_equal_approx(Vector2(4, 4)));
+	}
+
+	SUBCASE("[Geometry2D] Standard case") {
+		Geometry2D::get_closest_points_between_segments(Vector2(0, 1), Vector2(-2, -1), Vector2(0, 0), Vector2(2, -2), c1, c2);
+		CHECK(c1.is_equal_approx(Vector2(-0.5, 0.5)));
+		CHECK(c2.is_equal_approx(Vector2(0, 0)));
+	}
+
+	SUBCASE("[Geometry2D] Segments intersect") {
+		Geometry2D::get_closest_points_between_segments(Vector2(-1, 1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, -1), c1, c2);
+		CHECK(c1.is_equal_approx(Vector2(0, 0)));
+		CHECK(c2.is_equal_approx(Vector2(0, 0)));
+	}
 }
 
 TEST_CASE("[Geometry2D] Make atlas") {
@@ -685,12 +711,12 @@ TEST_CASE("[Geometry2D] Clip polyline with polygon") {
 		r = Geometry2D::clip_polyline_with_polygon(l, p);
 		REQUIRE_MESSAGE(r.size() == 2, "There should be 2 resulting clipped lines.");
 		REQUIRE_MESSAGE(r[0].size() == 3, "The resulting clipped line should have 3 vertices.");
-		CHECK(r[0][0].is_equal_approx(Vector2(160, 320)));
+		CHECK(r[0][0].is_equal_approx(Vector2(121.412682, 225.038757)));
 		CHECK(r[0][1].is_equal_approx(Vector2(122, 250)));
-		CHECK(r[0][2].is_equal_approx(Vector2(121.412682, 225.038757)));
+		CHECK(r[0][2].is_equal_approx(Vector2(160, 320)));
 		REQUIRE_MESSAGE(r[1].size() == 2, "The resulting clipped line should have 2 vertices.");
-		CHECK(r[1][0].is_equal_approx(Vector2(53.07737, 116.143021)));
-		CHECK(r[1][1].is_equal_approx(Vector2(55, 70)));
+		CHECK(r[1][0].is_equal_approx(Vector2(55, 70)));
+		CHECK(r[1][1].is_equal_approx(Vector2(53.07737, 116.143021)));
 	}
 }
 

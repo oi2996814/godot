@@ -1,36 +1,34 @@
-/*************************************************************************/
-/*  visible_on_screen_notifier_3d.cpp                                    */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  visible_on_screen_notifier_3d.cpp                                     */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #include "visible_on_screen_notifier_3d.h"
-
-#include "scene/scene_string_names.h"
 
 void VisibleOnScreenNotifier3D::_visibility_enter() {
 	if (!is_inside_tree() || Engine::get_singleton()->is_editor_hint()) {
@@ -38,7 +36,7 @@ void VisibleOnScreenNotifier3D::_visibility_enter() {
 	}
 
 	on_screen = true;
-	emit_signal(SceneStringNames::get_singleton()->screen_entered);
+	emit_signal(SceneStringName(screen_entered));
 	_screen_enter();
 }
 void VisibleOnScreenNotifier3D::_visibility_exit() {
@@ -47,7 +45,7 @@ void VisibleOnScreenNotifier3D::_visibility_exit() {
 	}
 
 	on_screen = false;
-	emit_signal(SceneStringNames::get_singleton()->screen_exited);
+	emit_signal(SceneStringName(screen_exited));
 	_screen_exit();
 }
 
@@ -95,10 +93,12 @@ VisibleOnScreenNotifier3D::VisibleOnScreenNotifier3D() {
 	RS::get_singleton()->visibility_notifier_set_callbacks(notifier, callable_mp(this, &VisibleOnScreenNotifier3D::_visibility_enter), callable_mp(this, &VisibleOnScreenNotifier3D::_visibility_exit));
 	set_base(notifier);
 }
+
 VisibleOnScreenNotifier3D::~VisibleOnScreenNotifier3D() {
-	RID base = get_base();
+	RID base_old = get_base();
 	set_base(RID());
-	RS::get_singleton()->free(base);
+	ERR_FAIL_NULL(RenderingServer::get_singleton());
+	RS::get_singleton()->free(base_old);
 }
 
 //////////////////////////////////////
@@ -126,7 +126,11 @@ void VisibleOnScreenEnabler3D::set_enable_node_path(NodePath p_path) {
 		return;
 	}
 	enable_node_path = p_path;
-	if (is_inside_tree()) {
+	if (enable_node_path.is_empty()) {
+		node_id = ObjectID();
+		return;
+	}
+	if (is_inside_tree() && !Engine::get_singleton()->is_editor_hint()) {
 		node_id = ObjectID();
 		Node *node = get_node(enable_node_path);
 		if (node) {
@@ -165,8 +169,11 @@ void VisibleOnScreenEnabler3D::_notification(int p_what) {
 			if (Engine::get_singleton()->is_editor_hint()) {
 				return;
 			}
-
 			node_id = ObjectID();
+			if (enable_node_path.is_empty()) {
+				return;
+			}
+
 			Node *node = get_node(enable_node_path);
 			if (node) {
 				node_id = node->get_instance_id();
@@ -188,7 +195,7 @@ void VisibleOnScreenEnabler3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_enable_node_path"), &VisibleOnScreenEnabler3D::get_enable_node_path);
 
 	ADD_GROUP("Enabling", "enable_");
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "enable_mode", PROPERTY_HINT_ENUM, "Inherit,Always,WhenPaused"), "set_enable_mode", "get_enable_mode");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "enable_mode", PROPERTY_HINT_ENUM, "Inherit,Always,When Paused"), "set_enable_mode", "get_enable_mode");
 	ADD_PROPERTY(PropertyInfo(Variant::NODE_PATH, "enable_node_path"), "set_enable_node_path", "get_enable_node_path");
 
 	BIND_ENUM_CONSTANT(ENABLE_MODE_INHERIT);

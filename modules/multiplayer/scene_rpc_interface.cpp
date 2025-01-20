@@ -1,42 +1,42 @@
-/*************************************************************************/
-/*  scene_rpc_interface.cpp                                              */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  scene_rpc_interface.cpp                                               */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #include "scene_rpc_interface.h"
+
+#include "scene_multiplayer.h"
 
 #include "core/debugger/engine_debugger.h"
 #include "core/io/marshalls.h"
 #include "scene/main/multiplayer_api.h"
 #include "scene/main/node.h"
 #include "scene/main/window.h"
-
-#include "scene_multiplayer.h"
 
 // The RPC meta is composed by a single byte that contains (starting from the least significant bit):
 // - `NetworkCommands` in the first four bits.
@@ -52,16 +52,15 @@
 #define BYTE_ONLY_OR_NO_ARGS_FLAG (1 << BYTE_ONLY_OR_NO_ARGS_SHIFT)
 
 #ifdef DEBUG_ENABLED
-_FORCE_INLINE_ void SceneRPCInterface::_profile_node_data(const String &p_what, ObjectID p_id) {
-	if (EngineDebugger::is_profiling("rpc")) {
+_FORCE_INLINE_ void SceneRPCInterface::_profile_node_data(const String &p_what, ObjectID p_id, int p_size) {
+	if (EngineDebugger::is_profiling("multiplayer:rpc")) {
 		Array values;
-		values.push_back(p_id);
 		values.push_back(p_what);
-		EngineDebugger::profiler_add_frame_data("rpc", values);
+		values.push_back(p_id);
+		values.push_back(p_size);
+		EngineDebugger::profiler_add_frame_data("multiplayer:rpc", values);
 	}
 }
-#else
-_FORCE_INLINE_ void SceneRPCInterface::_profile_node_data(const String &p_what, ObjectID p_id) {}
 #endif
 
 // Returns the packet size stripping the node path added when the node is not yet cached.
@@ -81,9 +80,9 @@ void SceneRPCInterface::_parse_rpc_config(const Variant &p_config, bool p_for_no
 	ERR_FAIL_COND(p_config.get_type() != Variant::DICTIONARY);
 	const Dictionary config = p_config;
 	Array names = config.keys();
-	names.sort(); // Ensure ID order
+	names.sort_custom(callable_mp_static(&StringLikeVariantOrder::compare)); // Ensure ID order
 	for (int i = 0; i < names.size(); i++) {
-		ERR_CONTINUE(names[i].get_type() != Variant::STRING);
+		ERR_CONTINUE(!names[i].is_string());
 		String name = names[i].operator String();
 		ERR_CONTINUE(config[name].get_type() != Variant::DICTIONARY);
 		ERR_CONTINUE(!config[name].operator Dictionary().has("rpc_mode"));
@@ -109,7 +108,7 @@ const SceneRPCInterface::RPCConfigCache &SceneRPCInterface::_get_node_config(con
 		return rpc_cache[oid];
 	}
 	RPCConfigCache cache;
-	_parse_rpc_config(p_node->get_node_rpc_config(), true, cache);
+	_parse_rpc_config(p_node->get_rpc_config(), true, cache);
 	if (p_node->get_script_instance()) {
 		_parse_rpc_config(p_node->get_script_instance()->get_rpc_config(), false, cache);
 	}
@@ -117,25 +116,9 @@ const SceneRPCInterface::RPCConfigCache &SceneRPCInterface::_get_node_config(con
 	return rpc_cache[oid];
 }
 
-_FORCE_INLINE_ bool _can_call_mode(Node *p_node, MultiplayerAPI::RPCMode mode, int p_remote_id) {
-	switch (mode) {
-		case MultiplayerAPI::RPC_MODE_DISABLED: {
-			return false;
-		} break;
-		case MultiplayerAPI::RPC_MODE_ANY_PEER: {
-			return true;
-		} break;
-		case MultiplayerAPI::RPC_MODE_AUTHORITY: {
-			return !p_node->is_multiplayer_authority() && p_remote_id == p_node->get_multiplayer_authority();
-		} break;
-	}
-
-	return false;
-}
-
 String SceneRPCInterface::get_rpc_md5(const Object *p_obj) {
 	const Node *node = Object::cast_to<Node>(p_obj);
-	ERR_FAIL_COND_V(!node, "");
+	ERR_FAIL_NULL_V(node, "");
 	const RPCConfigCache cache = _get_node_config(node);
 	String rpc_list;
 	for (const KeyValue<uint16_t, RPCConfig> &config : cache.configs) {
@@ -146,7 +129,7 @@ String SceneRPCInterface::get_rpc_md5(const Object *p_obj) {
 
 Node *SceneRPCInterface::_process_get_node(int p_from, const uint8_t *p_packet, uint32_t p_node_target, int p_packet_len) {
 	Node *root_node = SceneTree::get_singleton()->get_root()->get_node(multiplayer->get_root_path());
-	ERR_FAIL_COND_V(!root_node, nullptr);
+	ERR_FAIL_NULL_V(root_node, nullptr);
 	Node *node = nullptr;
 
 	if (p_node_target & 0x80000000) {
@@ -168,7 +151,7 @@ Node *SceneRPCInterface::_process_get_node(int p_from, const uint8_t *p_packet, 
 		return node;
 	} else {
 		// Use cached path.
-		return Object::cast_to<Node>(multiplayer->get_path_cache()->get_cached_object(p_from, p_node_target));
+		return Object::cast_to<Node>(multiplayer_cache->get_cached_object(p_from, p_node_target));
 	}
 }
 
@@ -226,7 +209,7 @@ void SceneRPCInterface::process_rpc(int p_from, const uint8_t *p_packet, int p_p
 	}
 
 	Node *node = _process_get_node(p_from, p_packet, node_target, p_packet_len);
-	ERR_FAIL_COND_MSG(node == nullptr, "Invalid packet received. Requested node was not found.");
+	ERR_FAIL_NULL_MSG(node, "Invalid packet received. Requested node was not found.");
 
 	uint16_t name_id = 0;
 	switch (name_id_compression) {
@@ -253,7 +236,19 @@ void SceneRPCInterface::_process_rpc(Node *p_node, const uint16_t p_rpc_method_i
 	ERR_FAIL_COND(!cache_config.configs.has(p_rpc_method_id));
 	const RPCConfig &config = cache_config.configs[p_rpc_method_id];
 
-	bool can_call = _can_call_mode(p_node, config.rpc_mode, p_from);
+	bool can_call = false;
+	switch (config.rpc_mode) {
+		case MultiplayerAPI::RPC_MODE_DISABLED: {
+			can_call = false;
+		} break;
+		case MultiplayerAPI::RPC_MODE_ANY_PEER: {
+			can_call = true;
+		} break;
+		case MultiplayerAPI::RPC_MODE_AUTHORITY: {
+			can_call = p_from == p_node->get_multiplayer_authority();
+		} break;
+	}
+
 	ERR_FAIL_COND_MSG(!can_call, "RPC '" + String(config.name) + "' is not allowed on node " + p_node->get_path() + " from: " + itos(p_from) + ". Mode is " + itos((int)config.rpc_mode) + ", authority is " + itos(p_node->get_multiplayer_authority()) + ".");
 
 	int argc = 0;
@@ -277,7 +272,7 @@ void SceneRPCInterface::_process_rpc(Node *p_node, const uint16_t p_rpc_method_i
 	argp.resize(argc);
 
 #ifdef DEBUG_ENABLED
-	_profile_node_data("rpc_in", p_node->get_instance_id());
+	_profile_node_data("rpc_in", p_node->get_instance_id(), p_packet_len);
 #endif
 
 	int out;
@@ -296,7 +291,7 @@ void SceneRPCInterface::_process_rpc(Node *p_node, const uint16_t p_rpc_method_i
 	}
 }
 
-void SceneRPCInterface::_send_rpc(Node *p_from, int p_to, uint16_t p_rpc_id, const RPCConfig &p_config, const StringName &p_name, const Variant **p_arg, int p_argcount) {
+void SceneRPCInterface::_send_rpc(Node *p_node, int p_to, uint16_t p_rpc_id, const RPCConfig &p_config, const StringName &p_name, const Variant **p_arg, int p_argcount) {
 	Ref<MultiplayerPeer> peer = multiplayer->get_multiplayer_peer();
 	ERR_FAIL_COND_MSG(peer.is_null(), "Attempt to call RPC without active multiplayer peer.");
 
@@ -312,12 +307,34 @@ void SceneRPCInterface::_send_rpc(Node *p_from, int p_to, uint16_t p_rpc_id, con
 		ERR_FAIL_MSG("Attempt to call RPC with unknown peer ID: " + itos(p_to) + ".");
 	}
 
-	// See if all peers have cached path (if so, call can be fast).
-	int psc_id;
-	const bool has_all_peers = multiplayer->get_path_cache()->send_object_cache(p_from, p_to, psc_id);
+	// See if all peers have cached path (if so, call can be fast) while building the RPC target list.
+	HashSet<int> targets;
+	int psc_id = -1;
+	bool has_all_peers = true;
+	const ObjectID oid = p_node->get_instance_id();
+	if (p_to > 0) {
+		ERR_FAIL_COND_MSG(!multiplayer_replicator->is_rpc_visible(oid, p_to), "Attempt to call an RPC to a peer that cannot see this node. Peer ID: " + itos(p_to));
+		targets.insert(p_to);
+		has_all_peers = multiplayer_cache->send_object_cache(p_node, p_to, psc_id);
+	} else {
+		bool restricted = !multiplayer_replicator->is_rpc_visible(oid, 0);
+		for (const int &P : multiplayer->get_connected_peers()) {
+			if (p_to < 0 && P == -p_to) {
+				continue; // Excluded peer.
+			}
+			if (restricted && !multiplayer_replicator->is_rpc_visible(oid, P)) {
+				continue; // Not visible to this peer.
+			}
+			targets.insert(P);
+			bool has_peer = multiplayer_cache->send_object_cache(p_node, P, psc_id);
+			has_all_peers = has_all_peers && has_peer;
+		}
+	}
+	if (targets.is_empty()) {
+		return; // No one in sight.
+	}
 
 	// Create base packet, lots of hardcode because it must be tight.
-
 	int ofs = 0;
 
 #define MAKE_ROOM(m_amount)             \
@@ -399,21 +416,21 @@ void SceneRPCInterface::_send_rpc(Node *p_from, int p_to, uint16_t p_rpc_id, con
 	ERR_FAIL_COND(node_id_compression > 3);
 	ERR_FAIL_COND(name_id_compression > 1);
 
+#ifdef DEBUG_ENABLED
+	_profile_node_data("rpc_out", p_node->get_instance_id(), ofs);
+#endif
+
 	// We can now set the meta
 	packet_cache.write[0] = command_type + (node_id_compression << NODE_ID_COMPRESSION_SHIFT) + (name_id_compression << NAME_ID_COMPRESSION_SHIFT) + (byte_only_or_no_args ? BYTE_ONLY_OR_NO_ARGS_FLAG : 0);
-
-#ifdef DEBUG_ENABLED
-	multiplayer->profile_bandwidth("out", ofs);
-#endif
 
 	// Take chance and set transfer mode, since all send methods will use it.
 	peer->set_transfer_channel(p_config.channel);
 	peer->set_transfer_mode(p_config.transfer_mode);
 
 	if (has_all_peers) {
-		// They all have verified paths, so send fast.
-		peer->set_target_peer(p_to); // To all of you.
-		peer->put_packet(packet_cache.ptr(), ofs); // A message with love.
+		for (const int P : targets) {
+			multiplayer->send_command(P, packet_cache.ptr(), ofs);
+		}
 	} else {
 		// Unreachable because the node ID is never compressed if the peers doesn't know it.
 		CRASH_COND(node_id_compression != NETWORK_NODE_ID_COMPRESSION_32);
@@ -421,33 +438,22 @@ void SceneRPCInterface::_send_rpc(Node *p_from, int p_to, uint16_t p_rpc_id, con
 		// Not all verified path, so send one by one.
 
 		// Append path at the end, since we will need it for some packets.
-		NodePath from_path = multiplayer->get_root_path().rel_path_to(p_from->get_path());
-		CharString pname = String(from_path).utf8();
+		CharString pname = String(multiplayer->get_root_path().rel_path_to(p_node->get_path())).utf8();
 		int path_len = encode_cstring(pname.get_data(), nullptr);
 		MAKE_ROOM(ofs + path_len);
 		encode_cstring(pname.get_data(), &(packet_cache.write[ofs]));
 
-		for (const int &P : multiplayer->get_connected_peers()) {
-			if (p_to < 0 && P == -p_to) {
-				continue; // Continue, excluded.
-			}
-
-			if (p_to > 0 && P != p_to) {
-				continue; // Continue, not for this peer.
-			}
-
-			bool confirmed = multiplayer->get_path_cache()->is_cache_confirmed(from_path, P);
-
-			peer->set_target_peer(P); // To this one specifically.
-
+		// Not all verified path, so check which needs the longer packet.
+		for (const int P : targets) {
+			bool confirmed = multiplayer_cache->is_cache_confirmed(p_node, P);
 			if (confirmed) {
 				// This one confirmed path, so use id.
 				encode_uint32(psc_id, &(packet_cache.write[1]));
-				peer->put_packet(packet_cache.ptr(), ofs);
+				multiplayer->send_command(P, packet_cache.ptr(), ofs);
 			} else {
 				// This one did not confirm path yet, so use entire path (sorry!).
 				encode_uint32(0x80000000 | ofs, &(packet_cache.write[1])); // Offset to path and flag.
-				peer->put_packet(packet_cache.ptr(), ofs + path_len);
+				multiplayer->send_command(P, packet_cache.ptr(), ofs + path_len);
 			}
 		}
 	}
@@ -455,7 +461,7 @@ void SceneRPCInterface::_send_rpc(Node *p_from, int p_to, uint16_t p_rpc_id, con
 
 Error SceneRPCInterface::rpcp(Object *p_obj, int p_peer_id, const StringName &p_method, const Variant **p_arg, int p_argcount) {
 	Ref<MultiplayerPeer> peer = multiplayer->get_multiplayer_peer();
-	ERR_FAIL_COND_V_MSG(!peer.is_valid(), ERR_UNCONFIGURED, "Trying to call an RPC while no multiplayer peer is active.");
+	ERR_FAIL_COND_V_MSG(peer.is_null(), ERR_UNCONFIGURED, "Trying to call an RPC while no multiplayer peer is active.");
 	Node *node = Object::cast_to<Node>(p_obj);
 	ERR_FAIL_COND_V_MSG(!node || !node->is_inside_tree(), ERR_INVALID_PARAMETER, "The object must be a valid Node inside the SceneTree");
 	ERR_FAIL_COND_V_MSG(peer->get_connection_status() != MultiplayerPeer::CONNECTION_CONNECTED, ERR_CONNECTION_ERROR, "Trying to call an RPC via a multiplayer peer which is not connected.");
@@ -480,10 +486,6 @@ Error SceneRPCInterface::rpcp(Object *p_obj, int p_peer_id, const StringName &p_
 	}
 
 	if (p_peer_id != caller_id) {
-#ifdef DEBUG_ENABLED
-		_profile_node_data("rpc_out", node->get_instance_id());
-#endif
-
 		_send_rpc(node, p_peer_id, rpc_id, config, p_method, p_arg, p_argcount);
 	}
 

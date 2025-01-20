@@ -1,36 +1,35 @@
-/*************************************************************************/
-/*  xr_interface_extension.cpp                                           */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  xr_interface_extension.cpp                                            */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #include "xr_interface_extension.h"
 #include "servers/rendering/renderer_rd/storage_rd/texture_storage.h"
-#include "servers/rendering/rendering_server_globals.h"
 
 void XRInterfaceExtension::_bind_methods() {
 	GDVIRTUAL_BIND(_get_name);
@@ -39,6 +38,7 @@ void XRInterfaceExtension::_bind_methods() {
 	GDVIRTUAL_BIND(_is_initialized);
 	GDVIRTUAL_BIND(_initialize);
 	GDVIRTUAL_BIND(_uninitialize);
+	GDVIRTUAL_BIND(_get_system_info);
 
 	GDVIRTUAL_BIND(_supports_play_area_mode, "mode");
 	GDVIRTUAL_BIND(_get_play_area_mode);
@@ -57,8 +57,6 @@ void XRInterfaceExtension::_bind_methods() {
 	GDVIRTUAL_BIND(_pre_draw_viewport, "render_target");
 	GDVIRTUAL_BIND(_post_draw_viewport, "render_target", "screen_rect");
 	GDVIRTUAL_BIND(_end_frame);
-
-	GDVIRTUAL_BIND(_notification, "what");
 
 	/** input and output **/
 
@@ -100,37 +98,31 @@ StringName XRInterfaceExtension::get_name() const {
 }
 
 uint32_t XRInterfaceExtension::get_capabilities() const {
-	uint32_t capabilities;
-
-	if (GDVIRTUAL_CALL(_get_capabilities, capabilities)) {
-		return capabilities;
-	}
-
-	return 0;
+	uint32_t capabilities = 0;
+	GDVIRTUAL_CALL(_get_capabilities, capabilities);
+	return capabilities;
 }
 
 bool XRInterfaceExtension::is_initialized() const {
-	bool initialised = false;
-
-	if (GDVIRTUAL_CALL(_is_initialized, initialised)) {
-		return initialised;
-	}
-
-	return false;
+	bool initialized = false;
+	GDVIRTUAL_CALL(_is_initialized, initialized);
+	return initialized;
 }
 
 bool XRInterfaceExtension::initialize() {
-	bool initialised = false;
-
-	if (GDVIRTUAL_CALL(_initialize, initialised)) {
-		return initialised;
-	}
-
-	return false;
+	bool initialized = false;
+	GDVIRTUAL_CALL(_initialize, initialized);
+	return initialized;
 }
 
 void XRInterfaceExtension::uninitialize() {
 	GDVIRTUAL_CALL(_uninitialize);
+}
+
+Dictionary XRInterfaceExtension::get_system_info() {
+	Dictionary dict;
+	GDVIRTUAL_CALL(_get_system_info, dict);
+	return dict;
 }
 
 PackedStringArray XRInterfaceExtension::get_suggested_tracker_names() const {
@@ -150,13 +142,9 @@ PackedStringArray XRInterfaceExtension::get_suggested_pose_names(const StringNam
 }
 
 XRInterface::TrackingStatus XRInterfaceExtension::get_tracking_status() const {
-	uint32_t status;
-
-	if (GDVIRTUAL_CALL(_get_tracking_status, status)) {
-		return TrackingStatus(status);
-	}
-
-	return XR_UNKNOWN_TRACKING;
+	XRInterface::TrackingStatus status = XR_UNKNOWN_TRACKING;
+	GDVIRTUAL_CALL(_get_tracking_status, status);
+	return status;
 }
 
 void XRInterfaceExtension::trigger_haptic_pulse(const String &p_action_name, const StringName &p_tracker_name, double p_frequency, double p_amplitude, double p_duration_sec, double p_delay_sec) {
@@ -164,52 +152,34 @@ void XRInterfaceExtension::trigger_haptic_pulse(const String &p_action_name, con
 }
 
 bool XRInterfaceExtension::supports_play_area_mode(XRInterface::PlayAreaMode p_mode) {
-	bool is_supported;
-
-	if (GDVIRTUAL_CALL(_supports_play_area_mode, p_mode, is_supported)) {
-		return is_supported;
-	}
-
-	return false;
+	bool is_supported = false;
+	GDVIRTUAL_CALL(_supports_play_area_mode, p_mode, is_supported);
+	return is_supported;
 }
 
 XRInterface::PlayAreaMode XRInterfaceExtension::get_play_area_mode() const {
-	uint32_t mode;
-
-	if (GDVIRTUAL_CALL(_get_play_area_mode, mode)) {
-		return XRInterface::PlayAreaMode(mode);
-	}
-
-	return XRInterface::XR_PLAY_AREA_UNKNOWN;
+	XRInterface::PlayAreaMode mode = XR_PLAY_AREA_UNKNOWN;
+	GDVIRTUAL_CALL(_get_play_area_mode, mode);
+	return mode;
 }
 
 bool XRInterfaceExtension::set_play_area_mode(XRInterface::PlayAreaMode p_mode) {
-	bool success;
-
-	if (GDVIRTUAL_CALL(_set_play_area_mode, p_mode, success)) {
-		return success;
-	}
-
-	return false;
+	bool success = false;
+	GDVIRTUAL_CALL(_set_play_area_mode, p_mode, success);
+	return success;
 }
 
 PackedVector3Array XRInterfaceExtension::get_play_area() const {
 	PackedVector3Array arr;
-
 	GDVIRTUAL_CALL(_get_play_area, arr);
-
 	return arr;
 }
 
 /** these will only be implemented on AR interfaces, so we want dummies for VR **/
 bool XRInterfaceExtension::get_anchor_detection_is_enabled() const {
-	bool enabled;
-
-	if (GDVIRTUAL_CALL(_get_anchor_detection_is_enabled, enabled)) {
-		return enabled;
-	}
-
-	return false;
+	bool enabled = false;
+	GDVIRTUAL_CALL(_get_anchor_detection_is_enabled, enabled);
+	return enabled;
 }
 
 void XRInterfaceExtension::set_anchor_detection_is_enabled(bool p_enable) {
@@ -218,53 +188,33 @@ void XRInterfaceExtension::set_anchor_detection_is_enabled(bool p_enable) {
 }
 
 int XRInterfaceExtension::get_camera_feed_id() {
-	int feed_id;
-
-	if (GDVIRTUAL_CALL(_get_camera_feed_id, feed_id)) {
-		return feed_id;
-	}
-
-	return 0;
+	int feed_id = 0;
+	GDVIRTUAL_CALL(_get_camera_feed_id, feed_id);
+	return feed_id;
 }
 
 Size2 XRInterfaceExtension::get_render_target_size() {
 	Size2 size;
-
-	if (GDVIRTUAL_CALL(_get_render_target_size, size)) {
-		return size;
-	}
-
-	return Size2(0, 0);
+	GDVIRTUAL_CALL(_get_render_target_size, size);
+	return size;
 }
 
 uint32_t XRInterfaceExtension::get_view_count() {
-	uint32_t view_count;
-
-	if (GDVIRTUAL_CALL(_get_view_count, view_count)) {
-		return view_count;
-	}
-
-	return 1;
+	uint32_t view_count = 1;
+	GDVIRTUAL_CALL(_get_view_count, view_count);
+	return view_count;
 }
 
 Transform3D XRInterfaceExtension::get_camera_transform() {
 	Transform3D transform;
-
-	if (GDVIRTUAL_CALL(_get_camera_transform, transform)) {
-		return transform;
-	}
-
-	return Transform3D();
+	GDVIRTUAL_CALL(_get_camera_transform, transform);
+	return transform;
 }
 
 Transform3D XRInterfaceExtension::get_transform_for_view(uint32_t p_view, const Transform3D &p_cam_transform) {
 	Transform3D transform;
-
-	if (GDVIRTUAL_CALL(_get_transform_for_view, p_view, p_cam_transform, transform)) {
-		return transform;
-	}
-
-	return Transform3D();
+	GDVIRTUAL_CALL(_get_transform_for_view, p_view, p_cam_transform, transform);
+	return transform;
 }
 
 Projection XRInterfaceExtension::get_projection_for_view(uint32_t p_view, double p_aspect, double p_z_near, double p_z_far) {
@@ -294,29 +244,20 @@ RID XRInterfaceExtension::get_vrs_texture() {
 
 RID XRInterfaceExtension::get_color_texture() {
 	RID texture;
-	if (GDVIRTUAL_CALL(_get_color_texture, texture)) {
-		return texture;
-	} else {
-		return RID();
-	}
+	GDVIRTUAL_CALL(_get_color_texture, texture);
+	return texture;
 }
 
 RID XRInterfaceExtension::get_depth_texture() {
 	RID texture;
-	if (GDVIRTUAL_CALL(_get_depth_texture, texture)) {
-		return texture;
-	} else {
-		return RID();
-	}
+	GDVIRTUAL_CALL(_get_depth_texture, texture);
+	return texture;
 }
 
 RID XRInterfaceExtension::get_velocity_texture() {
 	RID texture;
-	if (GDVIRTUAL_CALL(_get_velocity_texture, texture)) {
-		return texture;
-	} else {
-		return RID();
-	}
+	GDVIRTUAL_CALL(_get_velocity_texture, texture);
+	return texture;
 }
 
 void XRInterfaceExtension::add_blit(RID p_render_target, Rect2 p_src_rect, Rect2i p_dst_rect, bool p_use_layer, uint32_t p_layer, bool p_apply_lens_distortion, Vector2 p_eye_center, double p_k1, double p_k2, double p_upscale, double p_aspect_ratio) {
@@ -351,13 +292,8 @@ void XRInterfaceExtension::pre_render() {
 
 bool XRInterfaceExtension::pre_draw_viewport(RID p_render_target) {
 	bool do_render = true;
-
-	if (GDVIRTUAL_CALL(_pre_draw_viewport, p_render_target, do_render)) {
-		return do_render;
-	} else {
-		// if not implemented we're returning true
-		return true;
-	}
+	GDVIRTUAL_CALL(_pre_draw_viewport, p_render_target, do_render);
+	return do_render; // If not implemented we're returning true.
 }
 
 Vector<BlitToScreen> XRInterfaceExtension::post_draw_viewport(RID p_render_target, const Rect2 &p_screen_rect) {
@@ -375,10 +311,6 @@ Vector<BlitToScreen> XRInterfaceExtension::post_draw_viewport(RID p_render_targe
 
 void XRInterfaceExtension::end_frame() {
 	GDVIRTUAL_CALL(_end_frame);
-}
-
-void XRInterfaceExtension::notification(int p_what) {
-	GDVIRTUAL_CALL(_notification, p_what);
 }
 
 RID XRInterfaceExtension::get_render_target_texture(RID p_render_target) {

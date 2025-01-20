@@ -14,8 +14,7 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 #define FLAG_FLIP_Y (1 << 5)
 #define FLAG_FORCE_LUMINANCE (1 << 6)
 #define FLAG_COPY_ALL_SOURCE (1 << 7)
-#define FLAG_HIGH_QUALITY_GLOW (1 << 8)
-#define FLAG_ALPHA_TO_ONE (1 << 9)
+#define FLAG_ALPHA_TO_ONE (1 << 8)
 
 layout(push_constant, std430) uniform Params {
 	ivec4 section;
@@ -58,7 +57,7 @@ layout(r32f, set = 3, binding = 0) uniform restrict writeonly image2D dest_buffe
 #elif defined(DST_IMAGE_8BIT)
 layout(rgba8, set = 3, binding = 0) uniform restrict writeonly image2D dest_buffer;
 #else
-layout(rgba32f, set = 3, binding = 0) uniform restrict writeonly image2D dest_buffer;
+layout(rgba16f, set = 3, binding = 0) uniform restrict writeonly image2D dest_buffer;
 #endif
 
 #ifdef MODE_GAUSSIAN_BLUR
@@ -93,34 +92,24 @@ void main() {
 #ifdef MODE_GAUSSIAN_BLUR
 
 	// First pass copy texture into 16x16 local memory for every 8x8 thread block
-	vec2 quad_center_uv = clamp(vec2(gl_GlobalInvocationID.xy + gl_LocalInvocationID.xy - 3.5) / params.section.zw, vec2(0.5 / params.section.zw), vec2(1.0 - 1.5 / params.section.zw));
+	vec2 quad_center_uv = clamp(vec2(params.section.xy + gl_GlobalInvocationID.xy + gl_LocalInvocationID.xy - 3.5) / params.section.zw, vec2(0.5 / params.section.zw), vec2(1.0 - 1.5 / params.section.zw));
 	uint dest_index = gl_LocalInvocationID.x * 2 + gl_LocalInvocationID.y * 2 * 16;
 
-#ifdef MODE_GLOW
-	if (bool(params.flags & FLAG_HIGH_QUALITY_GLOW)) {
-		vec2 quad_offset_uv = clamp((vec2(gl_GlobalInvocationID.xy + gl_LocalInvocationID.xy - 3.0)) / params.section.zw, vec2(0.5 / params.section.zw), vec2(1.0 - 1.5 / params.section.zw));
+	local_cache[dest_index] = textureLod(source_color, quad_center_uv, 0);
+	local_cache[dest_index + 1] = textureLod(source_color, quad_center_uv + vec2(1.0 / params.section.z, 0.0), 0);
+	local_cache[dest_index + 16] = textureLod(source_color, quad_center_uv + vec2(0.0, 1.0 / params.section.w), 0);
+	local_cache[dest_index + 16 + 1] = textureLod(source_color, quad_center_uv + vec2(1.0 / params.section.zw), 0);
 
-		local_cache[dest_index] = (textureLod(source_color, quad_center_uv, 0) + textureLod(source_color, quad_offset_uv, 0)) * 0.5;
-		local_cache[dest_index + 1] = (textureLod(source_color, quad_center_uv + vec2(1.0 / params.section.z, 0.0), 0) + textureLod(source_color, quad_offset_uv + vec2(1.0 / params.section.z, 0.0), 0)) * 0.5;
-		local_cache[dest_index + 16] = (textureLod(source_color, quad_center_uv + vec2(0.0, 1.0 / params.section.w), 0) + textureLod(source_color, quad_offset_uv + vec2(0.0, 1.0 / params.section.w), 0)) * 0.5;
-		local_cache[dest_index + 16 + 1] = (textureLod(source_color, quad_center_uv + vec2(1.0 / params.section.zw), 0) + textureLod(source_color, quad_offset_uv + vec2(1.0 / params.section.zw), 0)) * 0.5;
-	} else
-#endif
-	{
-		local_cache[dest_index] = textureLod(source_color, quad_center_uv, 0);
-		local_cache[dest_index + 1] = textureLod(source_color, quad_center_uv + vec2(1.0 / params.section.z, 0.0), 0);
-		local_cache[dest_index + 16] = textureLod(source_color, quad_center_uv + vec2(0.0, 1.0 / params.section.w), 0);
-		local_cache[dest_index + 16 + 1] = textureLod(source_color, quad_center_uv + vec2(1.0 / params.section.zw), 0);
-	}
 #ifdef MODE_GLOW
 	if (bool(params.flags & FLAG_GLOW_FIRST_PASS)) {
 		// Tonemap initial samples to reduce weight of fireflies: https://graphicrants.blogspot.com/2013/12/tone-mapping.html
-		local_cache[dest_index] /= 1.0 + dot(local_cache[dest_index].rgb, vec3(0.299, 0.587, 0.114));
-		local_cache[dest_index + 1] /= 1.0 + dot(local_cache[dest_index + 1].rgb, vec3(0.299, 0.587, 0.114));
-		local_cache[dest_index + 16] /= 1.0 + dot(local_cache[dest_index + 16].rgb, vec3(0.299, 0.587, 0.114));
-		local_cache[dest_index + 16 + 1] /= 1.0 + dot(local_cache[dest_index + 16 + 1].rgb, vec3(0.299, 0.587, 0.114));
+		vec3 tonemap_col = vec3(0.299, 0.587, 0.114) / max(params.glow_luminance_cap, 6.0);
+		local_cache[dest_index] /= 1.0 + dot(local_cache[dest_index].rgb, tonemap_col);
+		local_cache[dest_index + 1] /= 1.0 + dot(local_cache[dest_index + 1].rgb, tonemap_col);
+		local_cache[dest_index + 16] /= 1.0 + dot(local_cache[dest_index + 16].rgb, tonemap_col);
+		local_cache[dest_index + 16 + 1] /= 1.0 + dot(local_cache[dest_index + 16 + 1].rgb, tonemap_col);
 	}
-	const float kernel[4] = { 0.174938, 0.165569, 0.140367, 0.106595 };
+	const float kernel[5] = { 0.2024, 0.1790, 0.1240, 0.0672, 0.0285 };
 #else
 	// Simpler blur uses SIGMA2 for the gaussian kernel for a stronger effect.
 	const float kernel[4] = { 0.214607, 0.189879, 0.131514, 0.071303 };
@@ -138,6 +127,10 @@ void main() {
 	color_top += local_cache[read_index - 1] * kernel[1];
 	color_top += local_cache[read_index - 2] * kernel[2];
 	color_top += local_cache[read_index - 3] * kernel[3];
+#ifdef MODE_GLOW
+	color_top += local_cache[read_index + 4] * kernel[4];
+	color_top += local_cache[read_index - 4] * kernel[4];
+#endif // MODE_GLOW
 
 	vec4 color_bottom = vec4(0.0);
 	color_bottom += local_cache[read_index + 16] * kernel[0];
@@ -147,6 +140,10 @@ void main() {
 	color_bottom += local_cache[read_index - 1 + 16] * kernel[1];
 	color_bottom += local_cache[read_index - 2 + 16] * kernel[2];
 	color_bottom += local_cache[read_index - 3 + 16] * kernel[3];
+#ifdef MODE_GLOW
+	color_bottom += local_cache[read_index + 4 + 16] * kernel[4];
+	color_bottom += local_cache[read_index - 4 + 16] * kernel[4];
+#endif // MODE_GLOW
 
 	// rotate samples to take advantage of cache coherency
 	uint write_index = gl_LocalInvocationID.y * 2 + gl_LocalInvocationID.x * 16;
@@ -173,11 +170,15 @@ void main() {
 	color += temp_cache[index - 1] * kernel[1];
 	color += temp_cache[index - 2] * kernel[2];
 	color += temp_cache[index - 3] * kernel[3];
+#ifdef MODE_GLOW
+	color += temp_cache[index + 4] * kernel[4];
+	color += temp_cache[index - 4] * kernel[4];
+#endif // MODE_GLOW
 
 #ifdef MODE_GLOW
 	if (bool(params.flags & FLAG_GLOW_FIRST_PASS)) {
 		// Undo tonemap to restore range: https://graphicrants.blogspot.com/2013/12/tone-mapping.html
-		color /= 1.0 - dot(color.rgb, vec3(0.299, 0.587, 0.114));
+		color /= 1.0 - dot(color.rgb, vec3(0.299, 0.587, 0.114) / max(params.glow_luminance_cap, 6.0));
 	}
 
 	color *= params.glow_strength;
@@ -194,10 +195,10 @@ void main() {
 
 		color = min(color * feedback, vec4(params.glow_luminance_cap));
 	}
-#endif
+#endif // MODE_GLOW
 	imageStore(dest_buffer, pos + params.target, color);
 
-#endif
+#endif // MODE_GAUSSIAN_BLUR
 
 #ifdef MODE_SIMPLE_COPY
 
@@ -227,7 +228,7 @@ void main() {
 
 	imageStore(dest_buffer, pos + params.target, color);
 
-#endif
+#endif // MODE_SIMPLE_COPY
 
 #ifdef MODE_SIMPLE_COPY_DEPTH
 
@@ -239,7 +240,7 @@ void main() {
 
 	imageStore(dest_buffer, pos + params.target, vec4(color.r));
 
-#endif
+#endif // MODE_SIMPLE_COPY_DEPTH
 
 #ifdef MODE_LINEARIZE_DEPTH_COPY
 
@@ -253,7 +254,7 @@ void main() {
 	}
 
 	imageStore(dest_buffer, pos + params.target, color);
-#endif
+#endif // MODE_LINEARIZE_DEPTH_COPY
 
 #if defined(MODE_CUBEMAP_TO_PANORAMA) || defined(MODE_CUBEMAP_ARRAY_TO_PANORAMA)
 
@@ -276,7 +277,7 @@ void main() {
 	vec4 color = textureLod(source_color, vec4(normal, params.camera_z_far), 0.0); //the biggest the lod the least the acne
 #endif
 	imageStore(dest_buffer, pos + params.target, color);
-#endif
+#endif // defined(MODE_CUBEMAP_TO_PANORAMA) || defined(MODE_CUBEMAP_ARRAY_TO_PANORAMA)
 
 #ifdef MODE_SET_COLOR
 	imageStore(dest_buffer, pos + params.target, params.set_color);

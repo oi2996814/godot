@@ -1,32 +1,32 @@
-/*************************************************************************/
-/*  transform_3d.h                                                       */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  transform_3d.h                                                        */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #ifndef TRANSFORM_3D_H
 #define TRANSFORM_3D_H
@@ -34,8 +34,9 @@
 #include "core/math/aabb.h"
 #include "core/math/basis.h"
 #include "core/math/plane.h"
+#include "core/templates/vector.h"
 
-struct _NO_DISCARD_ Transform3D {
+struct [[nodiscard]] Transform3D {
 	Basis basis;
 	Vector3 origin;
 
@@ -51,8 +52,8 @@ struct _NO_DISCARD_ Transform3D {
 	void rotate(const Vector3 &p_axis, real_t p_angle);
 	void rotate_basis(const Vector3 &p_axis, real_t p_angle);
 
-	void set_look_at(const Vector3 &p_eye, const Vector3 &p_target, const Vector3 &p_up = Vector3(0, 1, 0));
-	Transform3D looking_at(const Vector3 &p_target, const Vector3 &p_up = Vector3(0, 1, 0)) const;
+	void set_look_at(const Vector3 &p_eye, const Vector3 &p_target, const Vector3 &p_up = Vector3(0, 1, 0), bool p_use_model_front = false);
+	Transform3D looking_at(const Vector3 &p_target, const Vector3 &p_up = Vector3(0, 1, 0), bool p_use_model_front = false) const;
 
 	void scale(const Vector3 &p_scale);
 	Transform3D scaled(const Vector3 &p_scale) const;
@@ -74,6 +75,7 @@ struct _NO_DISCARD_ Transform3D {
 	void orthogonalize();
 	Transform3D orthogonalized() const;
 	bool is_equal_approx(const Transform3D &p_transform) const;
+	bool is_finite() const;
 
 	bool operator==(const Transform3D &p_transform) const;
 	bool operator!=(const Transform3D &p_transform) const;
@@ -100,8 +102,10 @@ struct _NO_DISCARD_ Transform3D {
 
 	void operator*=(const Transform3D &p_transform);
 	Transform3D operator*(const Transform3D &p_transform) const;
-	void operator*=(const real_t p_val);
-	Transform3D operator*(const real_t p_val) const;
+	void operator*=(real_t p_val);
+	Transform3D operator*(real_t p_val) const;
+	void operator/=(real_t p_val);
+	Transform3D operator/(real_t p_val) const;
 
 	Transform3D interpolate_with(const Transform3D &p_transform, real_t p_c) const;
 
@@ -111,11 +115,11 @@ struct _NO_DISCARD_ Transform3D {
 				basis.xform(v));
 	}
 
-	void set(real_t xx, real_t xy, real_t xz, real_t yx, real_t yy, real_t yz, real_t zx, real_t zy, real_t zz, real_t tx, real_t ty, real_t tz) {
-		basis.set(xx, xy, xz, yx, yy, yz, zx, zy, zz);
-		origin.x = tx;
-		origin.y = ty;
-		origin.z = tz;
+	void set(real_t p_xx, real_t p_xy, real_t p_xz, real_t p_yx, real_t p_yy, real_t p_yz, real_t p_zx, real_t p_zy, real_t p_zz, real_t p_tx, real_t p_ty, real_t p_tz) {
+		basis.set(p_xx, p_xy, p_xz, p_yx, p_yy, p_yz, p_zx, p_zy, p_zz);
+		origin.x = p_tx;
+		origin.y = p_ty;
+		origin.z = p_tz;
 	}
 
 	operator String() const;
@@ -123,7 +127,7 @@ struct _NO_DISCARD_ Transform3D {
 	Transform3D() {}
 	Transform3D(const Basis &p_basis, const Vector3 &p_origin = Vector3());
 	Transform3D(const Vector3 &p_x, const Vector3 &p_y, const Vector3 &p_z, const Vector3 &p_origin);
-	Transform3D(real_t xx, real_t xy, real_t xz, real_t yx, real_t yy, real_t yz, real_t zx, real_t zy, real_t zz, real_t ox, real_t oy, real_t oz);
+	Transform3D(real_t p_xx, real_t p_xy, real_t p_xz, real_t p_yx, real_t p_yy, real_t p_yz, real_t p_zx, real_t p_zy, real_t p_zz, real_t p_ox, real_t p_oy, real_t p_oz);
 };
 
 _FORCE_INLINE_ Vector3 Transform3D::xform(const Vector3 &p_vector) const {

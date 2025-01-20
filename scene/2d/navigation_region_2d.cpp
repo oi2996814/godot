@@ -1,360 +1,41 @@
-/*************************************************************************/
-/*  navigation_region_2d.cpp                                             */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  navigation_region_2d.cpp                                              */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #include "navigation_region_2d.h"
 
-#include "core/core_string_names.h"
-#include "core/math/geometry_2d.h"
-#include "core/os/mutex.h"
 #include "scene/resources/world_2d.h"
 #include "servers/navigation_server_2d.h"
-#include "servers/navigation_server_3d.h"
 
-#include "thirdparty/misc/polypartition.h"
-
-#ifdef TOOLS_ENABLED
-Rect2 NavigationPolygon::_edit_get_rect() const {
-	if (rect_cache_dirty) {
-		item_rect = Rect2();
-		bool first = true;
-
-		for (int i = 0; i < outlines.size(); i++) {
-			const Vector<Vector2> &outline = outlines[i];
-			const int outline_size = outline.size();
-			if (outline_size < 3) {
-				continue;
-			}
-			const Vector2 *p = outline.ptr();
-			for (int j = 0; j < outline_size; j++) {
-				if (first) {
-					item_rect = Rect2(p[j], Vector2(0, 0));
-					first = false;
-				} else {
-					item_rect.expand_to(p[j]);
-				}
-			}
-		}
-
-		rect_cache_dirty = false;
-	}
-	return item_rect;
+RID NavigationRegion2D::get_rid() const {
+	return region;
 }
-
-bool NavigationPolygon::_edit_is_selected_on_click(const Point2 &p_point, double p_tolerance) const {
-	for (int i = 0; i < outlines.size(); i++) {
-		const Vector<Vector2> &outline = outlines[i];
-		const int outline_size = outline.size();
-		if (outline_size < 3) {
-			continue;
-		}
-		if (Geometry2D::is_point_in_polygon(p_point, Variant(outline))) {
-			return true;
-		}
-	}
-	return false;
-}
-#endif
-
-void NavigationPolygon::set_vertices(const Vector<Vector2> &p_vertices) {
-	{
-		MutexLock lock(navmesh_generation);
-		navmesh.unref();
-	}
-	vertices = p_vertices;
-	rect_cache_dirty = true;
-}
-
-Vector<Vector2> NavigationPolygon::get_vertices() const {
-	return vertices;
-}
-
-void NavigationPolygon::_set_polygons(const TypedArray<Vector<int32_t>> &p_array) {
-	{
-		MutexLock lock(navmesh_generation);
-		navmesh.unref();
-	}
-	polygons.resize(p_array.size());
-	for (int i = 0; i < p_array.size(); i++) {
-		polygons.write[i].indices = p_array[i];
-	}
-}
-
-TypedArray<Vector<int32_t>> NavigationPolygon::_get_polygons() const {
-	TypedArray<Vector<int32_t>> ret;
-	ret.resize(polygons.size());
-	for (int i = 0; i < ret.size(); i++) {
-		ret[i] = polygons[i].indices;
-	}
-
-	return ret;
-}
-
-void NavigationPolygon::_set_outlines(const TypedArray<Vector<Vector2>> &p_array) {
-	outlines.resize(p_array.size());
-	for (int i = 0; i < p_array.size(); i++) {
-		outlines.write[i] = p_array[i];
-	}
-	rect_cache_dirty = true;
-}
-
-TypedArray<Vector<Vector2>> NavigationPolygon::_get_outlines() const {
-	TypedArray<Vector<Vector2>> ret;
-	ret.resize(outlines.size());
-	for (int i = 0; i < ret.size(); i++) {
-		ret[i] = outlines[i];
-	}
-
-	return ret;
-}
-
-void NavigationPolygon::add_polygon(const Vector<int> &p_polygon) {
-	Polygon polygon;
-	polygon.indices = p_polygon;
-	polygons.push_back(polygon);
-	{
-		MutexLock lock(navmesh_generation);
-		navmesh.unref();
-	}
-}
-
-void NavigationPolygon::add_outline_at_index(const Vector<Vector2> &p_outline, int p_index) {
-	outlines.insert(p_index, p_outline);
-	rect_cache_dirty = true;
-}
-
-int NavigationPolygon::get_polygon_count() const {
-	return polygons.size();
-}
-
-Vector<int> NavigationPolygon::get_polygon(int p_idx) {
-	ERR_FAIL_INDEX_V(p_idx, polygons.size(), Vector<int>());
-	return polygons[p_idx].indices;
-}
-
-void NavigationPolygon::clear_polygons() {
-	polygons.clear();
-	{
-		MutexLock lock(navmesh_generation);
-		navmesh.unref();
-	}
-}
-
-Ref<NavigationMesh> NavigationPolygon::get_mesh() {
-	MutexLock lock(navmesh_generation);
-
-	if (navmesh.is_null()) {
-		navmesh.instantiate();
-		Vector<Vector3> verts;
-		{
-			verts.resize(get_vertices().size());
-			Vector3 *w = verts.ptrw();
-
-			const Vector2 *r = get_vertices().ptr();
-
-			for (int i(0); i < get_vertices().size(); i++) {
-				w[i] = Vector3(r[i].x, 0.0, r[i].y);
-			}
-		}
-		navmesh->set_vertices(verts);
-
-		for (int i(0); i < get_polygon_count(); i++) {
-			navmesh->add_polygon(get_polygon(i));
-		}
-	}
-
-	return navmesh;
-}
-
-void NavigationPolygon::add_outline(const Vector<Vector2> &p_outline) {
-	outlines.push_back(p_outline);
-	rect_cache_dirty = true;
-}
-
-int NavigationPolygon::get_outline_count() const {
-	return outlines.size();
-}
-
-void NavigationPolygon::set_outline(int p_idx, const Vector<Vector2> &p_outline) {
-	ERR_FAIL_INDEX(p_idx, outlines.size());
-	outlines.write[p_idx] = p_outline;
-	rect_cache_dirty = true;
-}
-
-void NavigationPolygon::remove_outline(int p_idx) {
-	ERR_FAIL_INDEX(p_idx, outlines.size());
-	outlines.remove_at(p_idx);
-	rect_cache_dirty = true;
-}
-
-Vector<Vector2> NavigationPolygon::get_outline(int p_idx) const {
-	ERR_FAIL_INDEX_V(p_idx, outlines.size(), Vector<Vector2>());
-	return outlines[p_idx];
-}
-
-void NavigationPolygon::clear_outlines() {
-	outlines.clear();
-	rect_cache_dirty = true;
-}
-
-void NavigationPolygon::make_polygons_from_outlines() {
-	{
-		MutexLock lock(navmesh_generation);
-		navmesh.unref();
-	}
-	List<TPPLPoly> in_poly, out_poly;
-
-	Vector2 outside_point(-1e10, -1e10);
-
-	for (int i = 0; i < outlines.size(); i++) {
-		Vector<Vector2> ol = outlines[i];
-		int olsize = ol.size();
-		if (olsize < 3) {
-			continue;
-		}
-		const Vector2 *r = ol.ptr();
-		for (int j = 0; j < olsize; j++) {
-			outside_point.x = MAX(r[j].x, outside_point.x);
-			outside_point.y = MAX(r[j].y, outside_point.y);
-		}
-	}
-
-	outside_point += Vector2(0.7239784, 0.819238); //avoid precision issues
-
-	for (int i = 0; i < outlines.size(); i++) {
-		Vector<Vector2> ol = outlines[i];
-		int olsize = ol.size();
-		if (olsize < 3) {
-			continue;
-		}
-		const Vector2 *r = ol.ptr();
-
-		int interscount = 0;
-		//test if this is an outer outline
-		for (int k = 0; k < outlines.size(); k++) {
-			if (i == k) {
-				continue; //no self intersect
-			}
-
-			Vector<Vector2> ol2 = outlines[k];
-			int olsize2 = ol2.size();
-			if (olsize2 < 3) {
-				continue;
-			}
-			const Vector2 *r2 = ol2.ptr();
-
-			for (int l = 0; l < olsize2; l++) {
-				if (Geometry2D::segment_intersects_segment(r[0], outside_point, r2[l], r2[(l + 1) % olsize2], nullptr)) {
-					interscount++;
-				}
-			}
-		}
-
-		bool outer = (interscount % 2) == 0;
-
-		TPPLPoly tp;
-		tp.Init(olsize);
-		for (int j = 0; j < olsize; j++) {
-			tp[j] = r[j];
-		}
-
-		if (outer) {
-			tp.SetOrientation(TPPL_ORIENTATION_CCW);
-		} else {
-			tp.SetOrientation(TPPL_ORIENTATION_CW);
-			tp.SetHole(true);
-		}
-
-		in_poly.push_back(tp);
-	}
-
-	TPPLPartition tpart;
-	if (tpart.ConvexPartition_HM(&in_poly, &out_poly) == 0) { //failed!
-		ERR_PRINT("NavigationPolygon: Convex partition failed!");
-		return;
-	}
-
-	polygons.clear();
-	vertices.clear();
-
-	HashMap<Vector2, int> points;
-	for (List<TPPLPoly>::Element *I = out_poly.front(); I; I = I->next()) {
-		TPPLPoly &tp = I->get();
-
-		struct Polygon p;
-
-		for (int64_t i = 0; i < tp.GetNumPoints(); i++) {
-			HashMap<Vector2, int>::Iterator E = points.find(tp[i]);
-			if (!E) {
-				E = points.insert(tp[i], vertices.size());
-				vertices.push_back(tp[i]);
-			}
-			p.indices.push_back(E->value);
-		}
-
-		polygons.push_back(p);
-	}
-
-	emit_signal(CoreStringNames::get_singleton()->changed);
-}
-
-void NavigationPolygon::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("set_vertices", "vertices"), &NavigationPolygon::set_vertices);
-	ClassDB::bind_method(D_METHOD("get_vertices"), &NavigationPolygon::get_vertices);
-
-	ClassDB::bind_method(D_METHOD("add_polygon", "polygon"), &NavigationPolygon::add_polygon);
-	ClassDB::bind_method(D_METHOD("get_polygon_count"), &NavigationPolygon::get_polygon_count);
-	ClassDB::bind_method(D_METHOD("get_polygon", "idx"), &NavigationPolygon::get_polygon);
-	ClassDB::bind_method(D_METHOD("clear_polygons"), &NavigationPolygon::clear_polygons);
-	ClassDB::bind_method(D_METHOD("get_mesh"), &NavigationPolygon::get_mesh);
-
-	ClassDB::bind_method(D_METHOD("add_outline", "outline"), &NavigationPolygon::add_outline);
-	ClassDB::bind_method(D_METHOD("add_outline_at_index", "outline", "index"), &NavigationPolygon::add_outline_at_index);
-	ClassDB::bind_method(D_METHOD("get_outline_count"), &NavigationPolygon::get_outline_count);
-	ClassDB::bind_method(D_METHOD("set_outline", "idx", "outline"), &NavigationPolygon::set_outline);
-	ClassDB::bind_method(D_METHOD("get_outline", "idx"), &NavigationPolygon::get_outline);
-	ClassDB::bind_method(D_METHOD("remove_outline", "idx"), &NavigationPolygon::remove_outline);
-	ClassDB::bind_method(D_METHOD("clear_outlines"), &NavigationPolygon::clear_outlines);
-	ClassDB::bind_method(D_METHOD("make_polygons_from_outlines"), &NavigationPolygon::make_polygons_from_outlines);
-
-	ClassDB::bind_method(D_METHOD("_set_polygons", "polygons"), &NavigationPolygon::_set_polygons);
-	ClassDB::bind_method(D_METHOD("_get_polygons"), &NavigationPolygon::_get_polygons);
-
-	ClassDB::bind_method(D_METHOD("_set_outlines", "outlines"), &NavigationPolygon::_set_outlines);
-	ClassDB::bind_method(D_METHOD("_get_outlines"), &NavigationPolygon::_get_outlines);
-
-	ADD_PROPERTY(PropertyInfo(Variant::PACKED_VECTOR2_ARRAY, "vertices", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR | PROPERTY_USAGE_INTERNAL), "set_vertices", "get_vertices");
-	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "polygons", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR | PROPERTY_USAGE_INTERNAL), "_set_polygons", "_get_polygons");
-	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "outlines", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR | PROPERTY_USAGE_INTERNAL), "_set_outlines", "_get_outlines");
-}
-
-/////////////////////////////
 
 void NavigationRegion2D::set_enabled(bool p_enabled) {
 	if (enabled == p_enabled) {
@@ -363,20 +44,10 @@ void NavigationRegion2D::set_enabled(bool p_enabled) {
 
 	enabled = p_enabled;
 
-	if (!is_inside_tree()) {
-		return;
-	}
-
-	if (!enabled) {
-		NavigationServer2D::get_singleton()->region_set_map(region, RID());
-		NavigationServer2D::get_singleton_mut()->disconnect("map_changed", callable_mp(this, &NavigationRegion2D::_map_changed));
-	} else {
-		NavigationServer2D::get_singleton()->region_set_map(region, get_world_2d()->get_navigation_map());
-		NavigationServer2D::get_singleton_mut()->connect("map_changed", callable_mp(this, &NavigationRegion2D::_map_changed));
-	}
+	NavigationServer2D::get_singleton()->region_set_enabled(region, enabled);
 
 #ifdef DEBUG_ENABLED
-	if (Engine::get_singleton()->is_editor_hint() || NavigationServer3D::get_singleton()->get_debug_enabled()) {
+	if (Engine::get_singleton()->is_editor_hint() || NavigationServer2D::get_singleton()->get_debug_navigation_enabled()) {
 		queue_redraw();
 	}
 #endif // DEBUG_ENABLED
@@ -384,6 +55,20 @@ void NavigationRegion2D::set_enabled(bool p_enabled) {
 
 bool NavigationRegion2D::is_enabled() const {
 	return enabled;
+}
+
+void NavigationRegion2D::set_use_edge_connections(bool p_enabled) {
+	if (use_edge_connections == p_enabled) {
+		return;
+	}
+
+	use_edge_connections = p_enabled;
+
+	NavigationServer2D::get_singleton()->region_set_use_edge_connections(region, use_edge_connections);
+}
+
+bool NavigationRegion2D::get_use_edge_connections() const {
+	return use_edge_connections;
 }
 
 void NavigationRegion2D::set_navigation_layers(uint32_t p_navigation_layers) {
@@ -453,146 +138,171 @@ real_t NavigationRegion2D::get_travel_cost() const {
 }
 
 RID NavigationRegion2D::get_region_rid() const {
-	return region;
+	return get_rid();
 }
 
-#ifdef TOOLS_ENABLED
+#ifdef DEBUG_ENABLED
 Rect2 NavigationRegion2D::_edit_get_rect() const {
-	return navpoly.is_valid() ? navpoly->_edit_get_rect() : Rect2();
+	return navigation_polygon.is_valid() ? navigation_polygon->_edit_get_rect() : Rect2();
 }
 
 bool NavigationRegion2D::_edit_is_selected_on_click(const Point2 &p_point, double p_tolerance) const {
-	return navpoly.is_valid() ? navpoly->_edit_is_selected_on_click(p_point, p_tolerance) : false;
+	return navigation_polygon.is_valid() ? navigation_polygon->_edit_is_selected_on_click(p_point, p_tolerance) : false;
 }
-#endif
+#endif // DEBUG_ENABLED
 
 void NavigationRegion2D::_notification(int p_what) {
 	switch (p_what) {
 		case NOTIFICATION_ENTER_TREE: {
-			if (enabled) {
-				NavigationServer2D::get_singleton()->region_set_map(region, get_world_2d()->get_navigation_map());
-				NavigationServer2D::get_singleton_mut()->connect("map_changed", callable_mp(this, &NavigationRegion2D::_map_changed));
-			}
+			_region_enter_navigation_map();
 		} break;
 
 		case NOTIFICATION_TRANSFORM_CHANGED: {
-			NavigationServer2D::get_singleton()->region_set_transform(region, get_global_transform());
+			set_physics_process_internal(true);
+		} break;
+
+		case NOTIFICATION_VISIBILITY_CHANGED: {
+#ifdef DEBUG_ENABLED
+			_set_debug_visible(is_visible_in_tree());
+#endif // DEBUG_ENABLED
 		} break;
 
 		case NOTIFICATION_EXIT_TREE: {
-			NavigationServer2D::get_singleton()->region_set_map(region, RID());
-			if (enabled) {
-				NavigationServer2D::get_singleton_mut()->disconnect("map_changed", callable_mp(this, &NavigationRegion2D::_map_changed));
-			}
+			_region_exit_navigation_map();
+#ifdef DEBUG_ENABLED
+			_set_debug_visible(false);
+#endif // DEBUG_ENABLED
+		} break;
+
+		case NOTIFICATION_INTERNAL_PHYSICS_PROCESS: {
+			set_physics_process_internal(false);
+			_region_update_transform();
 		} break;
 
 		case NOTIFICATION_DRAW: {
 #ifdef DEBUG_ENABLED
-			if (is_inside_tree() && (Engine::get_singleton()->is_editor_hint() || NavigationServer3D::get_singleton()->get_debug_enabled()) && navpoly.is_valid()) {
-				Vector<Vector2> verts = navpoly->get_vertices();
-				if (verts.size() < 3) {
-					return;
-				}
-
-				Color color;
-				if (enabled) {
-					color = NavigationServer3D::get_singleton()->get_debug_navigation_geometry_face_color();
-				} else {
-					color = NavigationServer3D::get_singleton()->get_debug_navigation_geometry_face_disabled_color();
-				}
-				Color doors_color = NavigationServer3D::get_singleton()->get_debug_navigation_edge_connection_color();
-
-				RandomPCG rand;
-
-				for (int i = 0; i < navpoly->get_polygon_count(); i++) {
-					// An array of vertices for this polygon.
-					Vector<int> polygon = navpoly->get_polygon(i);
-					Vector<Vector2> vertices;
-					vertices.resize(polygon.size());
-					for (int j = 0; j < polygon.size(); j++) {
-						ERR_FAIL_INDEX(polygon[j], verts.size());
-						vertices.write[j] = verts[polygon[j]];
-					}
-
-					// Generate the polygon color, slightly randomly modified from the settings one.
-					Color random_variation_color;
-					random_variation_color.set_hsv(color.get_h() + rand.random(-1.0, 1.0) * 0.1, color.get_s(), color.get_v() + rand.random(-1.0, 1.0) * 0.2);
-					random_variation_color.a = color.a;
-					Vector<Color> colors;
-					colors.push_back(random_variation_color);
-
-					RS::get_singleton()->canvas_item_add_polygon(get_canvas_item(), vertices, colors);
-				}
-
-				// Draw the region
-				Transform2D xform = get_global_transform();
-				const NavigationServer2D *ns = NavigationServer2D::get_singleton();
-				real_t radius = ns->map_get_edge_connection_margin(get_world_2d()->get_navigation_map()) / 2.0;
-				for (int i = 0; i < ns->region_get_connections_count(region); i++) {
-					// Two main points
-					Vector2 a = ns->region_get_connection_pathway_start(region, i);
-					a = xform.affine_inverse().xform(a);
-					Vector2 b = ns->region_get_connection_pathway_end(region, i);
-					b = xform.affine_inverse().xform(b);
-					draw_line(a, b, doors_color);
-
-					// Draw a circle to illustrate the margins.
-					real_t angle = a.angle_to_point(b);
-					draw_arc(a, radius, angle + Math_PI / 2.0, angle - Math_PI / 2.0 + Math_TAU, 10, doors_color);
-					draw_arc(b, radius, angle - Math_PI / 2.0, angle + Math_PI / 2.0, 10, doors_color);
-				}
+			if (is_inside_tree() && (Engine::get_singleton()->is_editor_hint() || NavigationServer2D::get_singleton()->get_debug_enabled()) && navigation_polygon.is_valid()) {
+				_update_debug_mesh();
+				_update_debug_edge_connections_mesh();
+				_update_debug_baking_rect();
 			}
 #endif // DEBUG_ENABLED
 		} break;
 	}
 }
 
-void NavigationRegion2D::set_navigation_polygon(const Ref<NavigationPolygon> &p_navpoly) {
-	if (p_navpoly == navpoly) {
-		return;
+void NavigationRegion2D::set_navigation_polygon(const Ref<NavigationPolygon> &p_navigation_polygon) {
+	if (navigation_polygon.is_valid()) {
+		navigation_polygon->disconnect_changed(callable_mp(this, &NavigationRegion2D::_navigation_polygon_changed));
 	}
 
-	if (navpoly.is_valid()) {
-		navpoly->disconnect(CoreStringNames::get_singleton()->changed, callable_mp(this, &NavigationRegion2D::_navpoly_changed));
+	navigation_polygon = p_navigation_polygon;
+#ifdef DEBUG_ENABLED
+	debug_mesh_dirty = true;
+#endif // DEBUG_ENABLED
+
+	_update_bounds();
+
+	NavigationServer2D::get_singleton()->region_set_navigation_polygon(region, p_navigation_polygon);
+
+	if (navigation_polygon.is_valid()) {
+		navigation_polygon->connect_changed(callable_mp(this, &NavigationRegion2D::_navigation_polygon_changed));
 	}
 
-	navpoly = p_navpoly;
-	NavigationServer2D::get_singleton()->region_set_navpoly(region, p_navpoly);
-
-	if (navpoly.is_valid()) {
-		navpoly->connect(CoreStringNames::get_singleton()->changed, callable_mp(this, &NavigationRegion2D::_navpoly_changed));
+#ifdef DEBUG_ENABLED
+	if (navigation_polygon.is_null()) {
+		_set_debug_visible(false);
 	}
-	_navpoly_changed();
+#endif // DEBUG_ENABLED
+
+	_navigation_polygon_changed();
 
 	update_configuration_warnings();
 }
 
 Ref<NavigationPolygon> NavigationRegion2D::get_navigation_polygon() const {
-	return navpoly;
+	return navigation_polygon;
 }
 
-void NavigationRegion2D::_navpoly_changed() {
+void NavigationRegion2D::set_navigation_map(RID p_navigation_map) {
+	if (map_override == p_navigation_map) {
+		return;
+	}
+
+	map_override = p_navigation_map;
+
+	NavigationServer2D::get_singleton()->region_set_map(region, map_override);
+}
+
+RID NavigationRegion2D::get_navigation_map() const {
+	if (map_override.is_valid()) {
+		return map_override;
+	} else if (is_inside_tree()) {
+		return get_world_2d()->get_navigation_map();
+	}
+	return RID();
+}
+
+void NavigationRegion2D::bake_navigation_polygon(bool p_on_thread) {
+	ERR_FAIL_COND_MSG(!Thread::is_main_thread(), "The SceneTree can only be parsed on the main thread. Call this function from the main thread or use call_deferred().");
+	ERR_FAIL_COND_MSG(navigation_polygon.is_null(), "Baking the navigation polygon requires a valid `NavigationPolygon` resource.");
+
+	Ref<NavigationMeshSourceGeometryData2D> source_geometry_data;
+	source_geometry_data.instantiate();
+
+	NavigationServer2D::get_singleton()->parse_source_geometry_data(navigation_polygon, source_geometry_data, this);
+
+	if (p_on_thread) {
+		NavigationServer2D::get_singleton()->bake_from_source_geometry_data_async(navigation_polygon, source_geometry_data, callable_mp(this, &NavigationRegion2D::_bake_finished).bind(navigation_polygon));
+	} else {
+		NavigationServer2D::get_singleton()->bake_from_source_geometry_data(navigation_polygon, source_geometry_data, callable_mp(this, &NavigationRegion2D::_bake_finished).bind(navigation_polygon));
+	}
+}
+
+void NavigationRegion2D::_bake_finished(Ref<NavigationPolygon> p_navigation_polygon) {
+	if (!Thread::is_main_thread()) {
+		callable_mp(this, &NavigationRegion2D::_bake_finished).call_deferred(p_navigation_polygon);
+		return;
+	}
+
+	set_navigation_polygon(p_navigation_polygon);
+	emit_signal(SNAME("bake_finished"));
+}
+
+bool NavigationRegion2D::is_baking() const {
+	return NavigationServer2D::get_singleton()->is_baking_navigation_polygon(navigation_polygon);
+}
+
+void NavigationRegion2D::_navigation_polygon_changed() {
 	if (is_inside_tree() && (Engine::get_singleton()->is_editor_hint() || get_tree()->is_debugging_navigation_hint())) {
 		queue_redraw();
 	}
-	if (navpoly.is_valid()) {
-		NavigationServer2D::get_singleton()->region_set_navpoly(region, navpoly);
+	if (navigation_polygon.is_valid()) {
+		NavigationServer2D::get_singleton()->region_set_navigation_polygon(region, navigation_polygon);
 	}
 }
 
-void NavigationRegion2D::_map_changed(RID p_map) {
 #ifdef DEBUG_ENABLED
+void NavigationRegion2D::_navigation_map_changed(RID p_map) {
 	if (is_inside_tree() && get_world_2d()->get_navigation_map() == p_map) {
 		queue_redraw();
 	}
-#endif // DEBUG_ENABLED
 }
+#endif // DEBUG_ENABLED
+
+#ifdef DEBUG_ENABLED
+void NavigationRegion2D::_navigation_debug_changed() {
+	if (is_inside_tree()) {
+		queue_redraw();
+	}
+}
+#endif // DEBUG_ENABLED
 
 PackedStringArray NavigationRegion2D::get_configuration_warnings() const {
 	PackedStringArray warnings = Node2D::get_configuration_warnings();
 
 	if (is_visible_in_tree() && is_inside_tree()) {
-		if (!navpoly.is_valid()) {
+		if (navigation_polygon.is_null()) {
 			warnings.push_back(RTR("A NavigationMesh resource must be set or created for this node to work. Please set a property or draw a polygon."));
 		}
 	}
@@ -601,11 +311,19 @@ PackedStringArray NavigationRegion2D::get_configuration_warnings() const {
 }
 
 void NavigationRegion2D::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("set_navigation_polygon", "navpoly"), &NavigationRegion2D::set_navigation_polygon);
+	ClassDB::bind_method(D_METHOD("get_rid"), &NavigationRegion2D::get_rid);
+
+	ClassDB::bind_method(D_METHOD("set_navigation_polygon", "navigation_polygon"), &NavigationRegion2D::set_navigation_polygon);
 	ClassDB::bind_method(D_METHOD("get_navigation_polygon"), &NavigationRegion2D::get_navigation_polygon);
 
 	ClassDB::bind_method(D_METHOD("set_enabled", "enabled"), &NavigationRegion2D::set_enabled);
 	ClassDB::bind_method(D_METHOD("is_enabled"), &NavigationRegion2D::is_enabled);
+
+	ClassDB::bind_method(D_METHOD("set_navigation_map", "navigation_map"), &NavigationRegion2D::set_navigation_map);
+	ClassDB::bind_method(D_METHOD("get_navigation_map"), &NavigationRegion2D::get_navigation_map);
+
+	ClassDB::bind_method(D_METHOD("set_use_edge_connections", "enabled"), &NavigationRegion2D::set_use_edge_connections);
+	ClassDB::bind_method(D_METHOD("get_use_edge_connections"), &NavigationRegion2D::get_use_edge_connections);
 
 	ClassDB::bind_method(D_METHOD("set_navigation_layers", "navigation_layers"), &NavigationRegion2D::set_navigation_layers);
 	ClassDB::bind_method(D_METHOD("get_navigation_layers"), &NavigationRegion2D::get_navigation_layers);
@@ -621,32 +339,340 @@ void NavigationRegion2D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_travel_cost", "travel_cost"), &NavigationRegion2D::set_travel_cost);
 	ClassDB::bind_method(D_METHOD("get_travel_cost"), &NavigationRegion2D::get_travel_cost);
 
-	ClassDB::bind_method(D_METHOD("_navpoly_changed"), &NavigationRegion2D::_navpoly_changed);
+	ClassDB::bind_method(D_METHOD("bake_navigation_polygon", "on_thread"), &NavigationRegion2D::bake_navigation_polygon, DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("is_baking"), &NavigationRegion2D::is_baking);
 
-	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "navpoly", PROPERTY_HINT_RESOURCE_TYPE, "NavigationPolygon"), "set_navigation_polygon", "get_navigation_polygon");
+	ClassDB::bind_method(D_METHOD("_navigation_polygon_changed"), &NavigationRegion2D::_navigation_polygon_changed);
+
+	ClassDB::bind_method(D_METHOD("get_bounds"), &NavigationRegion2D::get_bounds);
+
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "navigation_polygon", PROPERTY_HINT_RESOURCE_TYPE, "NavigationPolygon"), "set_navigation_polygon", "get_navigation_polygon");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "enabled"), "set_enabled", "is_enabled");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "use_edge_connections"), "set_use_edge_connections", "get_use_edge_connections");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "navigation_layers", PROPERTY_HINT_LAYERS_2D_NAVIGATION), "set_navigation_layers", "get_navigation_layers");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "enter_cost"), "set_enter_cost", "get_enter_cost");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "travel_cost"), "set_travel_cost", "get_travel_cost");
+
+	ADD_SIGNAL(MethodInfo("navigation_polygon_changed"));
+	ADD_SIGNAL(MethodInfo("bake_finished"));
 }
+
+#ifndef DISABLE_DEPRECATED
+// Compatibility with earlier 4.0 betas.
+bool NavigationRegion2D::_set(const StringName &p_name, const Variant &p_value) {
+	if (p_name == "navpoly") {
+		set_navigation_polygon(p_value);
+		return true;
+	}
+	return false;
+}
+
+bool NavigationRegion2D::_get(const StringName &p_name, Variant &r_ret) const {
+	if (p_name == "navpoly") {
+		r_ret = get_navigation_polygon();
+		return true;
+	}
+	return false;
+}
+#endif // DISABLE_DEPRECATED
 
 NavigationRegion2D::NavigationRegion2D() {
 	set_notify_transform(true);
+	set_hide_clip_children(true);
+
 	region = NavigationServer2D::get_singleton()->region_create();
+	NavigationServer2D::get_singleton()->region_set_owner_id(region, get_instance_id());
 	NavigationServer2D::get_singleton()->region_set_enter_cost(region, get_enter_cost());
 	NavigationServer2D::get_singleton()->region_set_travel_cost(region, get_travel_cost());
+	NavigationServer2D::get_singleton()->region_set_navigation_layers(region, navigation_layers);
+	NavigationServer2D::get_singleton()->region_set_use_edge_connections(region, use_edge_connections);
+	NavigationServer2D::get_singleton()->region_set_enabled(region, enabled);
 
 #ifdef DEBUG_ENABLED
-	NavigationServer3D::get_singleton_mut()->connect("map_changed", callable_mp(this, &NavigationRegion2D::_map_changed));
-	NavigationServer3D::get_singleton_mut()->connect("navigation_debug_changed", callable_mp(this, &NavigationRegion2D::_map_changed));
+	NavigationServer2D::get_singleton()->connect(SNAME("map_changed"), callable_mp(this, &NavigationRegion2D::_navigation_map_changed));
+	NavigationServer2D::get_singleton()->connect(SNAME("navigation_debug_changed"), callable_mp(this, &NavigationRegion2D::_navigation_debug_changed));
 #endif // DEBUG_ENABLED
 }
 
 NavigationRegion2D::~NavigationRegion2D() {
+	ERR_FAIL_NULL(NavigationServer2D::get_singleton());
 	NavigationServer2D::get_singleton()->free(region);
 
 #ifdef DEBUG_ENABLED
-	NavigationServer3D::get_singleton_mut()->disconnect("map_changed", callable_mp(this, &NavigationRegion2D::_map_changed));
-	NavigationServer3D::get_singleton_mut()->disconnect("navigation_debug_changed", callable_mp(this, &NavigationRegion2D::_map_changed));
+	NavigationServer2D::get_singleton()->disconnect(SNAME("map_changed"), callable_mp(this, &NavigationRegion2D::_navigation_map_changed));
+	NavigationServer2D::get_singleton()->disconnect(SNAME("navigation_debug_changed"), callable_mp(this, &NavigationRegion2D::_navigation_debug_changed));
+	if (debug_instance_rid.is_valid()) {
+		RS::get_singleton()->free(debug_instance_rid);
+	}
+	if (debug_mesh_rid.is_valid()) {
+		RS::get_singleton()->free(debug_mesh_rid);
+	}
 #endif // DEBUG_ENABLED
+}
+
+void NavigationRegion2D::_region_enter_navigation_map() {
+	if (!is_inside_tree()) {
+		return;
+	}
+
+	if (map_override.is_valid()) {
+		NavigationServer2D::get_singleton()->region_set_map(region, map_override);
+	} else {
+		NavigationServer2D::get_singleton()->region_set_map(region, get_world_2d()->get_navigation_map());
+	}
+
+	current_global_transform = get_global_transform();
+	NavigationServer2D::get_singleton()->region_set_transform(region, current_global_transform);
+
+	NavigationServer2D::get_singleton()->region_set_enabled(region, enabled);
+
+	queue_redraw();
+}
+
+void NavigationRegion2D::_region_exit_navigation_map() {
+	NavigationServer2D::get_singleton()->region_set_map(region, RID());
+}
+
+void NavigationRegion2D::_region_update_transform() {
+	if (!is_inside_tree()) {
+		return;
+	}
+
+	Transform2D new_global_transform = get_global_transform();
+	if (current_global_transform != new_global_transform) {
+		current_global_transform = new_global_transform;
+		NavigationServer2D::get_singleton()->region_set_transform(region, current_global_transform);
+	}
+
+	queue_redraw();
+}
+
+#ifdef DEBUG_ENABLED
+void NavigationRegion2D::_update_debug_mesh() {
+	if (!is_inside_tree()) {
+		_set_debug_visible(false);
+		return;
+	}
+
+	const NavigationServer2D *ns2d = NavigationServer2D::get_singleton();
+	RenderingServer *rs = RenderingServer::get_singleton();
+
+	if (!debug_instance_rid.is_valid()) {
+		debug_instance_rid = rs->canvas_item_create();
+	}
+	if (!debug_mesh_rid.is_valid()) {
+		debug_mesh_rid = rs->mesh_create();
+	}
+
+	const Transform2D region_gt = get_global_transform();
+
+	rs->canvas_item_set_parent(debug_instance_rid, get_world_2d()->get_canvas());
+	rs->canvas_item_set_z_index(debug_instance_rid, RS::CANVAS_ITEM_Z_MAX - 2);
+	rs->canvas_item_set_transform(debug_instance_rid, region_gt);
+
+	if (!debug_mesh_dirty) {
+		return;
+	}
+
+	rs->canvas_item_clear(debug_instance_rid);
+	rs->mesh_clear(debug_mesh_rid);
+	debug_mesh_dirty = false;
+
+	const Vector<Vector2> &vertices = navigation_polygon->get_vertices();
+	if (vertices.size() < 3) {
+		return;
+	}
+
+	int polygon_count = navigation_polygon->get_polygon_count();
+	if (polygon_count == 0) {
+		return;
+	}
+
+	bool enabled_geometry_face_random_color = ns2d->get_debug_navigation_enable_geometry_face_random_color();
+	bool enabled_edge_lines = ns2d->get_debug_navigation_enable_edge_lines();
+
+	Color debug_face_color = ns2d->get_debug_navigation_geometry_face_color();
+	Color debug_edge_color = ns2d->get_debug_navigation_geometry_edge_color();
+
+	if (!enabled) {
+		debug_face_color = ns2d->get_debug_navigation_geometry_face_disabled_color();
+		debug_edge_color = ns2d->get_debug_navigation_geometry_edge_disabled_color();
+	}
+
+	int vertex_count = 0;
+	int line_count = 0;
+
+	for (int i = 0; i < polygon_count; i++) {
+		const Vector<int> &polygon = navigation_polygon->get_polygon(i);
+		int polygon_size = polygon.size();
+		if (polygon_size < 3) {
+			continue;
+		}
+		line_count += polygon_size * 2;
+		vertex_count += (polygon_size - 2) * 3;
+	}
+
+	Vector<Vector2> face_vertex_array;
+	face_vertex_array.resize(vertex_count);
+
+	Vector<Color> face_color_array;
+	if (enabled_geometry_face_random_color) {
+		face_color_array.resize(vertex_count);
+	}
+
+	Vector<Vector2> line_vertex_array;
+	if (enabled_edge_lines) {
+		line_vertex_array.resize(line_count);
+	}
+
+	RandomPCG rand;
+	Color polygon_color = debug_face_color;
+
+	int face_vertex_index = 0;
+	int line_vertex_index = 0;
+
+	Vector2 *face_vertex_array_ptrw = face_vertex_array.ptrw();
+	Color *face_color_array_ptrw = face_color_array.ptrw();
+	Vector2 *line_vertex_array_ptrw = line_vertex_array.ptrw();
+
+	for (int polygon_index = 0; polygon_index < polygon_count; polygon_index++) {
+		const Vector<int> &polygon_indices = navigation_polygon->get_polygon(polygon_index);
+		int polygon_indices_size = polygon_indices.size();
+		if (polygon_indices_size < 3) {
+			continue;
+		}
+
+		if (enabled_geometry_face_random_color) {
+			// Generate the polygon color, slightly randomly modified from the settings one.
+			polygon_color.set_hsv(debug_face_color.get_h() + rand.random(-1.0, 1.0) * 0.1, debug_face_color.get_s(), debug_face_color.get_v() + rand.random(-1.0, 1.0) * 0.2);
+			polygon_color.a = debug_face_color.a;
+		}
+
+		for (int polygon_indices_index = 0; polygon_indices_index < polygon_indices_size - 2; polygon_indices_index++) {
+			face_vertex_array_ptrw[face_vertex_index] = vertices[polygon_indices[0]];
+			face_vertex_array_ptrw[face_vertex_index + 1] = vertices[polygon_indices[polygon_indices_index + 1]];
+			face_vertex_array_ptrw[face_vertex_index + 2] = vertices[polygon_indices[polygon_indices_index + 2]];
+			if (enabled_geometry_face_random_color) {
+				face_color_array_ptrw[face_vertex_index] = polygon_color;
+				face_color_array_ptrw[face_vertex_index + 1] = polygon_color;
+				face_color_array_ptrw[face_vertex_index + 2] = polygon_color;
+			}
+			face_vertex_index += 3;
+		}
+
+		if (enabled_edge_lines) {
+			for (int polygon_indices_index = 0; polygon_indices_index < polygon_indices_size; polygon_indices_index++) {
+				line_vertex_array_ptrw[line_vertex_index] = vertices[polygon_indices[polygon_indices_index]];
+				line_vertex_index += 1;
+				if (polygon_indices_index + 1 == polygon_indices_size) {
+					line_vertex_array_ptrw[line_vertex_index] = vertices[polygon_indices[0]];
+					line_vertex_index += 1;
+				} else {
+					line_vertex_array_ptrw[line_vertex_index] = vertices[polygon_indices[polygon_indices_index + 1]];
+					line_vertex_index += 1;
+				}
+			}
+		}
+	}
+
+	if (!enabled_geometry_face_random_color) {
+		face_color_array.resize(face_vertex_array.size());
+		face_color_array.fill(debug_face_color);
+	}
+
+	Array face_mesh_array;
+	face_mesh_array.resize(Mesh::ARRAY_MAX);
+	face_mesh_array[Mesh::ARRAY_VERTEX] = face_vertex_array;
+	face_mesh_array[Mesh::ARRAY_COLOR] = face_color_array;
+
+	rs->mesh_add_surface_from_arrays(debug_mesh_rid, RS::PRIMITIVE_TRIANGLES, face_mesh_array, Array(), Dictionary(), RS::ARRAY_FLAG_USE_2D_VERTICES);
+
+	if (enabled_edge_lines) {
+		Vector<Color> line_color_array;
+		line_color_array.resize(line_vertex_array.size());
+		line_color_array.fill(debug_edge_color);
+
+		Array line_mesh_array;
+		line_mesh_array.resize(Mesh::ARRAY_MAX);
+		line_mesh_array[Mesh::ARRAY_VERTEX] = line_vertex_array;
+		line_mesh_array[Mesh::ARRAY_COLOR] = line_color_array;
+
+		rs->mesh_add_surface_from_arrays(debug_mesh_rid, RS::PRIMITIVE_LINES, line_mesh_array, Array(), Dictionary(), RS::ARRAY_FLAG_USE_2D_VERTICES);
+	}
+
+	rs->canvas_item_add_mesh(debug_instance_rid, debug_mesh_rid, Transform2D());
+	rs->canvas_item_set_visible(debug_instance_rid, is_visible_in_tree());
+}
+#endif // DEBUG_ENABLED
+
+#ifdef DEBUG_ENABLED
+void NavigationRegion2D::_update_debug_edge_connections_mesh() {
+	const NavigationServer2D *ns2d = NavigationServer2D::get_singleton();
+	bool enable_edge_connections = use_edge_connections && ns2d->get_debug_navigation_enable_edge_connections() && ns2d->map_get_use_edge_connections(get_world_2d()->get_navigation_map());
+
+	if (enable_edge_connections) {
+		Color debug_edge_connection_color = ns2d->get_debug_navigation_edge_connection_color();
+		// Draw the region edge connections.
+		Transform2D xform = get_global_transform();
+		real_t radius = ns2d->map_get_edge_connection_margin(get_world_2d()->get_navigation_map()) / 2.0;
+		for (int i = 0; i < ns2d->region_get_connections_count(region); i++) {
+			// Two main points
+			Vector2 a = ns2d->region_get_connection_pathway_start(region, i);
+			a = xform.affine_inverse().xform(a);
+			Vector2 b = ns2d->region_get_connection_pathway_end(region, i);
+			b = xform.affine_inverse().xform(b);
+			draw_line(a, b, debug_edge_connection_color);
+
+			// Draw a circle to illustrate the margins.
+			real_t angle = a.angle_to_point(b);
+			draw_arc(a, radius, angle + Math_PI / 2.0, angle - Math_PI / 2.0 + Math_TAU, 10, debug_edge_connection_color);
+			draw_arc(b, radius, angle - Math_PI / 2.0, angle + Math_PI / 2.0, 10, debug_edge_connection_color);
+		}
+	}
+}
+#endif // DEBUG_ENABLED
+
+#ifdef DEBUG_ENABLED
+void NavigationRegion2D::_update_debug_baking_rect() {
+	Rect2 baking_rect = get_navigation_polygon()->get_baking_rect();
+	if (baking_rect.has_area()) {
+		Vector2 baking_rect_offset = get_navigation_polygon()->get_baking_rect_offset();
+		Rect2 debug_baking_rect = Rect2(baking_rect.position.x + baking_rect_offset.x, baking_rect.position.y + baking_rect_offset.y, baking_rect.size.x, baking_rect.size.y);
+		Color debug_baking_rect_color = Color(0.8, 0.5, 0.7, 0.1);
+		draw_rect(debug_baking_rect, debug_baking_rect_color);
+	}
+}
+#endif // DEBUG_ENABLED
+
+#ifdef DEBUG_ENABLED
+void NavigationRegion2D::_set_debug_visible(bool p_visible) {
+	RenderingServer *rs = RenderingServer::get_singleton();
+	ERR_FAIL_NULL(rs);
+	if (debug_instance_rid.is_valid()) {
+		RS::get_singleton()->canvas_item_set_visible(debug_instance_rid, p_visible);
+	}
+}
+#endif // DEBUG_ENABLED
+
+void NavigationRegion2D::_update_bounds() {
+	if (navigation_polygon.is_null()) {
+		bounds = Rect2();
+		return;
+	}
+
+	const Vector<Vector2> &vertices = navigation_polygon->get_vertices();
+	if (vertices.is_empty()) {
+		bounds = Rect2();
+		return;
+	}
+
+	const Transform2D gt = is_inside_tree() ? get_global_transform() : get_transform();
+
+	Rect2 new_bounds;
+	new_bounds.position = gt.xform(vertices[0]);
+
+	for (const Vector2 &vertex : vertices) {
+		new_bounds.expand_to(gt.xform(vertex));
+	}
+	bounds = new_bounds;
 }

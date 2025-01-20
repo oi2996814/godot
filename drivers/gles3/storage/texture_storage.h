@@ -1,51 +1,48 @@
-/*************************************************************************/
-/*  texture_storage.h                                                    */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  texture_storage.h                                                     */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #ifndef TEXTURE_STORAGE_GLES3_H
 #define TEXTURE_STORAGE_GLES3_H
 
 #ifdef GLES3_ENABLED
 
+#include "platform_gl.h"
+
 #include "config.h"
+#include "core/io/image.h"
 #include "core/os/os.h"
 #include "core/templates/rid_owner.h"
 #include "servers/rendering/renderer_compositor.h"
 #include "servers/rendering/storage/texture_storage.h"
 
-// This must come first to avoid windows.h mess
-#include "platform_config.h"
-#ifndef OPENGL_INCLUDE_H
-#include <GLES3/gl3.h>
-#else
-#include OPENGL_INCLUDE_H
-#endif
+#include "drivers/gles3/shaders/canvas_sdf.glsl.gen.h"
 
 namespace GLES3 {
 
@@ -82,23 +79,39 @@ namespace GLES3 {
 #define _EXT_COMPRESSED_RGBA8_ETC2_EAC 0x9278
 #define _EXT_COMPRESSED_SRGB8_ALPHA8_ETC2_EAC 0x9279
 
+#define _EXT_COMPRESSED_RGBA_ASTC_4x4_KHR 0x93B0
+#define _EXT_COMPRESSED_RGBA_ASTC_5x4_KHR 0x93B1
+#define _EXT_COMPRESSED_RGBA_ASTC_5x5_KHR 0x93B2
+#define _EXT_COMPRESSED_RGBA_ASTC_6x5_KHR 0x93B3
+#define _EXT_COMPRESSED_RGBA_ASTC_6x6_KHR 0x93B4
+#define _EXT_COMPRESSED_RGBA_ASTC_8x5_KHR 0x93B5
+#define _EXT_COMPRESSED_RGBA_ASTC_8x6_KHR 0x93B6
+#define _EXT_COMPRESSED_RGBA_ASTC_8x8_KHR 0x93B7
+#define _EXT_COMPRESSED_RGBA_ASTC_10x5_KHR 0x93B8
+#define _EXT_COMPRESSED_RGBA_ASTC_10x6_KHR 0x93B9
+#define _EXT_COMPRESSED_RGBA_ASTC_10x8_KHR 0x93BA
+#define _EXT_COMPRESSED_RGBA_ASTC_10x10_KHR 0x93BB
+#define _EXT_COMPRESSED_RGBA_ASTC_12x10_KHR 0x93BC
+#define _EXT_COMPRESSED_RGBA_ASTC_12x12_KHR 0x93BD
+
+#define _EXT_COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR 0x93D0
+#define _EXT_COMPRESSED_SRGB8_ALPHA8_ASTC_5x4_KHR 0x93D1
+#define _EXT_COMPRESSED_SRGB8_ALPHA8_ASTC_5x5_KHR 0x93D2
+#define _EXT_COMPRESSED_SRGB8_ALPHA8_ASTC_6x5_KHR 0x93D3
+#define _EXT_COMPRESSED_SRGB8_ALPHA8_ASTC_6x6_KHR 0x93D4
+#define _EXT_COMPRESSED_SRGB8_ALPHA8_ASTC_8x5_KHR 0x93D5
+#define _EXT_COMPRESSED_SRGB8_ALPHA8_ASTC_8x6_KHR 0x93D6
+#define _EXT_COMPRESSED_SRGB8_ALPHA8_ASTC_8x8_KHR 0x93D7
+#define _EXT_COMPRESSED_SRGB8_ALPHA8_ASTC_10x5_KHR 0x93D8
+#define _EXT_COMPRESSED_SRGB8_ALPHA8_ASTC_10x6_KHR 0x93D9
+#define _EXT_COMPRESSED_SRGB8_ALPHA8_ASTC_10x8_KHR 0x93DA
+#define _EXT_COMPRESSED_SRGB8_ALPHA8_ASTC_10x10_KHR 0x93DB
+#define _EXT_COMPRESSED_SRGB8_ALPHA8_ASTC_12x10_KHR 0x93DC
+#define _EXT_COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR 0x93DD
+
 #define _GL_TEXTURE_EXTERNAL_OES 0x8D65
 
-#ifdef GLES_OVER_GL
-#define _GL_HALF_FLOAT_OES 0x140B
-#else
-#define _GL_HALF_FLOAT_OES 0x8D61
-#endif
-
 #define _EXT_TEXTURE_CUBE_MAP_SEAMLESS 0x884F
-
-#define _RED_OES 0x1903
-
-#define _DEPTH_COMPONENT24_OES 0x81A6
-
-#ifndef GLES_OVER_GL
-#define glClearDepth glClearDepthf
-#endif //!GLES_OVER_GL
 
 enum DefaultGLTexture {
 	DEFAULT_GL_TEXTURE_WHITE,
@@ -114,6 +127,7 @@ enum DefaultGLTexture {
 	DEFAULT_GL_TEXTURE_3D_BLACK,
 	DEFAULT_GL_TEXTURE_2D_ARRAY_WHITE,
 	DEFAULT_GL_TEXTURE_2D_UINT,
+	DEFAULT_GL_TEXTURE_EXT,
 	DEFAULT_GL_TEXTURE_MAX
 };
 
@@ -126,22 +140,6 @@ struct CanvasTexture {
 
 	RS::CanvasItemTextureFilter texture_filter = RS::CANVAS_ITEM_TEXTURE_FILTER_DEFAULT;
 	RS::CanvasItemTextureRepeat texture_repeat = RS::CANVAS_ITEM_TEXTURE_REPEAT_DEFAULT;
-
-	Size2i size_cache = Size2i(1, 1);
-	bool use_normal_cache = false;
-	bool use_specular_cache = false;
-	bool cleared_cache = true;
-};
-
-/* CANVAS SHADOW */
-
-struct CanvasLightShadow {
-	RID self;
-	int size;
-	int height;
-	GLuint fbo;
-	GLuint depth;
-	GLuint distance; //for older devices
 };
 
 struct RenderTarget;
@@ -150,9 +148,10 @@ struct Texture {
 	RID self;
 
 	bool is_proxy = false;
+	bool is_from_native_handle = false;
 	bool is_render_target = false;
 
-	RID proxy_to = RID();
+	RID proxy_to;
 	Vector<RID> proxies;
 
 	String path;
@@ -172,7 +171,7 @@ struct Texture {
 		TYPE_3D
 	};
 
-	Type type;
+	Type type = TYPE_2D;
 	RS::TextureLayeredType layered_type = RS::TEXTURE_LAYERED_2D_ARRAY;
 
 	GLenum target = GL_TEXTURE_2D;
@@ -194,6 +193,7 @@ struct Texture {
 	RenderTarget *render_target = nullptr;
 
 	Ref<Image> image_cache_2d;
+	Vector<Ref<Image>> image_cache_3d;
 
 	bool redraw_if_visible = false;
 
@@ -211,6 +211,7 @@ struct Texture {
 	void copy_from(const Texture &o) {
 		proxy_to = o.proxy_to;
 		is_proxy = o.is_proxy;
+		is_from_native_handle = o.is_from_native_handle;
 		width = o.width;
 		height = o.height;
 		alloc_width = o.alloc_width;
@@ -244,10 +245,10 @@ struct Texture {
 		}
 		Config *config = Config::get_singleton();
 		state_filter = p_filter;
-		GLenum pmin = GL_NEAREST; // param min
-		GLenum pmag = GL_NEAREST; // param mag
-		GLint max_lod = 1000;
-		bool use_anisotropy = false;
+		GLenum pmin = GL_NEAREST;
+		GLenum pmag = GL_NEAREST;
+		GLint max_lod = 0;
+		GLfloat anisotropy = 1.0f;
 		switch (state_filter) {
 			case RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST: {
 				pmin = GL_NEAREST;
@@ -260,7 +261,7 @@ struct Texture {
 				max_lod = 0;
 			} break;
 			case RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST_WITH_MIPMAPS_ANISOTROPIC: {
-				use_anisotropy = true;
+				anisotropy = config->anisotropic_level;
 			};
 				[[fallthrough]];
 			case RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST_WITH_MIPMAPS: {
@@ -270,12 +271,14 @@ struct Texture {
 					max_lod = 0;
 				} else if (config->use_nearest_mip_filter) {
 					pmin = GL_NEAREST_MIPMAP_NEAREST;
+					max_lod = 1000;
 				} else {
 					pmin = GL_NEAREST_MIPMAP_LINEAR;
+					max_lod = 1000;
 				}
 			} break;
 			case RS::CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC: {
-				use_anisotropy = true;
+				anisotropy = config->anisotropic_level;
 			};
 				[[fallthrough]];
 			case RS::CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS: {
@@ -285,19 +288,22 @@ struct Texture {
 					max_lod = 0;
 				} else if (config->use_nearest_mip_filter) {
 					pmin = GL_LINEAR_MIPMAP_NEAREST;
+					max_lod = 1000;
 				} else {
 					pmin = GL_LINEAR_MIPMAP_LINEAR;
+					max_lod = 1000;
 				}
 			} break;
 			default: {
+				return;
 			} break;
 		}
 		glTexParameteri(target, GL_TEXTURE_MIN_FILTER, pmin);
 		glTexParameteri(target, GL_TEXTURE_MAG_FILTER, pmag);
 		glTexParameteri(target, GL_TEXTURE_BASE_LEVEL, 0);
 		glTexParameteri(target, GL_TEXTURE_MAX_LEVEL, max_lod);
-		if (config->support_anisotropic_filter && use_anisotropy) {
-			glTexParameterf(target, _GL_TEXTURE_MAX_ANISOTROPY_EXT, config->anisotropic_level);
+		if (config->support_anisotropic_filter) {
+			glTexParameterf(target, _GL_TEXTURE_MAX_ANISOTROPY_EXT, anisotropy);
 		}
 	}
 	void gl_set_repeat(RS::CanvasItemTextureRepeat p_repeat) {
@@ -305,8 +311,11 @@ struct Texture {
 			return;
 		}
 		state_repeat = p_repeat;
-		GLenum prep = GL_CLAMP_TO_EDGE; // parameter repeat
+		GLenum prep = GL_CLAMP_TO_EDGE;
 		switch (state_repeat) {
+			case RS::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED: {
+				prep = GL_CLAMP_TO_EDGE;
+			} break;
 			case RS::CANVAS_ITEM_TEXTURE_REPEAT_ENABLED: {
 				prep = GL_REPEAT;
 			} break;
@@ -314,6 +323,7 @@ struct Texture {
 				prep = GL_MIRRORED_REPEAT;
 			} break;
 			default: {
+				return;
 			} break;
 		}
 		glTexParameteri(target, GL_TEXTURE_WRAP_T, prep);
@@ -322,30 +332,63 @@ struct Texture {
 	}
 
 private:
-	RS::CanvasItemTextureFilter state_filter = RS::CANVAS_ITEM_TEXTURE_FILTER_LINEAR;
-	RS::CanvasItemTextureRepeat state_repeat = RS::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED;
+	RS::CanvasItemTextureFilter state_filter = RS::CANVAS_ITEM_TEXTURE_FILTER_MAX;
+	RS::CanvasItemTextureRepeat state_repeat = RS::CANVAS_ITEM_TEXTURE_REPEAT_MAX;
 };
 
 struct RenderTarget {
 	Point2i position = Point2i(0, 0);
 	Size2i size = Size2i(0, 0);
+	uint32_t view_count = 1;
 	int mipmap_count = 1;
 	RID self;
 	GLuint fbo = 0;
 	GLuint color = 0;
+	GLuint depth = 0;
 	GLuint backbuffer_fbo = 0;
 	GLuint backbuffer = 0;
+	GLuint backbuffer_depth = 0;
 
+	bool hdr = false; // For Compatibility this effects both 2D and 3D rendering!
 	GLuint color_internal_format = GL_RGBA8;
 	GLuint color_format = GL_RGBA;
 	GLuint color_type = GL_UNSIGNED_BYTE;
+	uint32_t color_format_size = 4;
 	Image::Format image_format = Image::FORMAT_RGBA8;
+
+	GLuint sdf_texture_write = 0;
+	GLuint sdf_texture_write_fb = 0;
+	GLuint sdf_texture_process[2] = { 0, 0 };
+	GLuint sdf_texture_read = 0;
+	RS::ViewportSDFOversize sdf_oversize = RS::VIEWPORT_SDF_OVERSIZE_120_PERCENT;
+	RS::ViewportSDFScale sdf_scale = RS::VIEWPORT_SDF_SCALE_50_PERCENT;
+	Size2i process_size;
+	bool sdf_enabled = false;
 
 	bool is_transparent = false;
 	bool direct_to_screen = false;
 
 	bool used_in_frame = false;
 	RS::ViewportMSAA msaa = RS::VIEWPORT_MSAA_DISABLED;
+	bool reattach_textures = false;
+
+	Rect2i render_region;
+
+	struct RTOverridden {
+		bool is_overridden = false;
+		RID color;
+		RID depth;
+		RID velocity;
+
+		struct FBOCacheEntry {
+			GLuint fbo;
+			GLuint color;
+			GLuint depth;
+			Size2i size;
+			Vector<GLuint> allocated_textures;
+		};
+		RBMap<uint32_t, FBOCacheEntry> fbo_cache;
+	} overridden;
 
 	RID texture;
 
@@ -366,15 +409,43 @@ private:
 
 	RID_Owner<CanvasTexture, true> canvas_texture_owner;
 
-	/* CANVAS SHADOW */
-
-	RID_PtrOwner<CanvasLightShadow> canvas_light_shadow_owner;
-
 	/* Texture API */
-
-	mutable RID_Owner<Texture> texture_owner;
+	// Textures can be created from threads, so this RID_Owner is thread safe.
+	mutable RID_Owner<Texture, true> texture_owner;
 
 	Ref<Image> _get_gl_image_and_format(const Ref<Image> &p_image, Image::Format p_format, Image::Format &r_real_format, GLenum &r_gl_format, GLenum &r_gl_internal_format, GLenum &r_gl_type, bool &r_compressed, bool p_force_decompress) const;
+
+	/* TEXTURE ATLAS API */
+
+	struct TextureAtlas {
+		struct Texture {
+			int users;
+			Rect2 uv_rect;
+		};
+
+		struct SortItem {
+			RID texture;
+			Size2i pixel_size;
+			Size2i size;
+			Point2i pos;
+
+			bool operator<(const SortItem &p_item) const {
+				//sort larger to smaller
+				if (size.height == p_item.size.height) {
+					return size.width > p_item.size.width;
+				} else {
+					return size.height > p_item.size.height;
+				}
+			}
+		};
+
+		HashMap<RID, Texture> textures;
+		bool dirty = true;
+
+		GLuint texture = 0;
+		GLuint framebuffer = 0;
+		Size2i size;
+	} texture_atlas;
 
 	/* Render Target API */
 
@@ -383,6 +454,19 @@ private:
 	void _clear_render_target(RenderTarget *rt);
 	void _update_render_target(RenderTarget *rt);
 	void _create_render_target_backbuffer(RenderTarget *rt);
+	void _render_target_allocate_sdf(RenderTarget *rt);
+	void _render_target_clear_sdf(RenderTarget *rt);
+	Rect2i _render_target_get_sdf_rect(const RenderTarget *rt) const;
+
+	void _texture_set_data(RID p_texture, const Ref<Image> &p_image, int p_layer, bool p_initialize);
+	void _texture_set_3d_data(RID p_texture, const Vector<Ref<Image>> &p_data, bool p_initialize);
+	void _texture_set_swizzle(Texture *p_texture, Image::Format p_real_format);
+	Vector<Ref<Image>> _texture_3d_read_framebuffer(Texture *p_texture) const;
+
+	struct RenderTargetSDF {
+		CanvasSdfShaderGLES3 shader;
+		RID shader_version;
+	} sdf_shader;
 
 public:
 	static TextureStorage *get_singleton();
@@ -396,8 +480,8 @@ public:
 
 	/* Canvas Texture API */
 
-	CanvasTexture *get_canvas_texture(RID p_rid) { return canvas_texture_owner.get_or_null(p_rid); };
-	bool owns_canvas_texture(RID p_rid) { return canvas_texture_owner.owns(p_rid); };
+	CanvasTexture *get_canvas_texture(RID p_rid) { return canvas_texture_owner.get_or_null(p_rid); }
+	bool owns_canvas_texture(RID p_rid) { return canvas_texture_owner.owns(p_rid); }
 
 	virtual RID canvas_texture_allocate() override;
 	virtual void canvas_texture_initialize(RID p_rid) override;
@@ -409,24 +493,20 @@ public:
 	virtual void canvas_texture_set_texture_filter(RID p_item, RS::CanvasItemTextureFilter p_filter) override;
 	virtual void canvas_texture_set_texture_repeat(RID p_item, RS::CanvasItemTextureRepeat p_repeat) override;
 
-	/* CANVAS SHADOW */
-
-	RID canvas_light_shadow_buffer_create(int p_width);
-
 	/* Texture API */
 
-	Texture *get_texture(RID p_rid) {
+	Texture *get_texture(RID p_rid) const {
 		Texture *texture = texture_owner.get_or_null(p_rid);
 		if (texture && texture->is_proxy) {
 			return texture_owner.get_or_null(texture->proxy_to);
 		}
 		return texture;
-	};
-	bool owns_texture(RID p_rid) { return texture_owner.owns(p_rid); };
+	}
+	bool owns_texture(RID p_rid) { return texture_owner.owns(p_rid); }
 
-	virtual bool can_create_resources_async() const override;
-
-	RID texture_create();
+	void texture_2d_initialize_from_texture(RID p_texture, Texture &p_tex) {
+		texture_owner.initialize_rid(p_texture, p_tex);
+	}
 
 	virtual RID texture_allocate() override;
 	virtual void texture_free(RID p_rid) override;
@@ -434,11 +514,20 @@ public:
 	virtual void texture_2d_initialize(RID p_texture, const Ref<Image> &p_image) override;
 	virtual void texture_2d_layered_initialize(RID p_texture, const Vector<Ref<Image>> &p_layers, RS::TextureLayeredType p_layered_type) override;
 	virtual void texture_3d_initialize(RID p_texture, Image::Format, int p_width, int p_height, int p_depth, bool p_mipmaps, const Vector<Ref<Image>> &p_data) override;
+	virtual void texture_external_initialize(RID p_texture, int p_width, int p_height, uint64_t p_external_buffer) override;
 	virtual void texture_proxy_initialize(RID p_texture, RID p_base) override; //all slices, then all the mipmaps, must be coherent
 
+	virtual RID texture_create_from_native_handle(RS::TextureType p_type, Image::Format p_format, uint64_t p_native_handle, int p_width, int p_height, int p_depth, int p_layers = 1, RS::TextureLayeredType p_layered_type = RS::TEXTURE_LAYERED_2D_ARRAY) override;
+
 	virtual void texture_2d_update(RID p_texture, const Ref<Image> &p_image, int p_layer = 0) override;
-	virtual void texture_3d_update(RID p_texture, const Vector<Ref<Image>> &p_data) override{};
+	virtual void texture_3d_update(RID p_texture, const Vector<Ref<Image>> &p_data) override;
+	virtual void texture_external_update(RID p_texture, int p_width, int p_height, uint64_t p_external_buffer) override;
 	virtual void texture_proxy_update(RID p_proxy, RID p_base) override;
+
+	Ref<Image> texture_2d_placeholder;
+	Vector<Ref<Image>> texture_2d_array_placeholder;
+	Vector<Ref<Image>> cubemap_placeholder;
+	Vector<Ref<Image>> texture_3d_placeholder;
 
 	//these two APIs can be used together or in combination with the others.
 	virtual void texture_2d_placeholder_initialize(RID p_texture) override;
@@ -446,8 +535,8 @@ public:
 	virtual void texture_3d_placeholder_initialize(RID p_texture) override;
 
 	virtual Ref<Image> texture_2d_get(RID p_texture) const override;
-	virtual Ref<Image> texture_2d_layer_get(RID p_texture, int p_layer) const override { return Ref<Image>(); };
-	virtual Vector<Ref<Image>> texture_3d_get(RID p_texture) const override { return Vector<Ref<Image>>(); };
+	virtual Ref<Image> texture_2d_layer_get(RID p_texture, int p_layer) const override;
+	virtual Vector<Ref<Image>> texture_3d_get(RID p_texture) const override;
 
 	virtual void texture_replace(RID p_texture, RID p_by_texture) override;
 	virtual void texture_set_size_override(RID p_texture, int p_width, int p_height) override;
@@ -466,25 +555,45 @@ public:
 
 	virtual Size2 texture_size_with_proxy(RID p_proxy) override;
 
+	virtual void texture_rd_initialize(RID p_texture, const RID &p_rd_texture, const RS::TextureLayeredType p_layer_type = RS::TEXTURE_LAYERED_2D_ARRAY) override;
+	virtual RID texture_get_rd_texture(RID p_texture, bool p_srgb = false) const override;
+	virtual uint64_t texture_get_native_handle(RID p_texture, bool p_srgb = false) const override;
+
 	void texture_set_data(RID p_texture, const Ref<Image> &p_image, int p_layer = 0);
-	void texture_set_data_partial(RID p_texture, const Ref<Image> &p_image, int src_x, int src_y, int src_w, int src_h, int dst_x, int dst_y, int p_dst_mip, int p_layer = 0);
-	//Ref<Image> texture_get_data(RID p_texture, int p_layer = 0) const;
-	void texture_set_sampler(RID p_texture, RS::CanvasItemTextureFilter p_filter, RS::CanvasItemTextureRepeat p_repeat);
-	Image::Format texture_get_format(RID p_texture) const;
+	virtual Image::Format texture_get_format(RID p_texture) const override;
 	uint32_t texture_get_texid(RID p_texture) const;
+	Vector3i texture_get_size(RID p_texture) const;
 	uint32_t texture_get_width(RID p_texture) const;
 	uint32_t texture_get_height(RID p_texture) const;
 	uint32_t texture_get_depth(RID p_texture) const;
 	void texture_bind(RID p_texture, uint32_t p_texture_no);
-	RID texture_create_radiance_cubemap(RID p_source, int p_resolution = -1) const;
+
+	/* TEXTURE ATLAS API */
+
+	void update_texture_atlas();
+
+	GLuint texture_atlas_get_texture() const;
+	_FORCE_INLINE_ Rect2 texture_atlas_get_texture_rect(RID p_texture) {
+		TextureAtlas::Texture *t = texture_atlas.textures.getptr(p_texture);
+		if (!t) {
+			return Rect2();
+		}
+
+		return t->uv_rect;
+	}
+
+	void texture_add_to_texture_atlas(RID p_texture);
+	void texture_remove_from_texture_atlas(RID p_texture);
+	void texture_atlas_mark_dirty_on_texture(RID p_texture);
+	void texture_atlas_remove_texture(RID p_texture);
 
 	/* DECAL API */
 
 	virtual RID decal_allocate() override;
 	virtual void decal_initialize(RID p_rid) override;
-	virtual void decal_free(RID p_rid) override{};
+	virtual void decal_free(RID p_rid) override {}
 
-	virtual void decal_set_extents(RID p_decal, const Vector3 &p_extents) override;
+	virtual void decal_set_size(RID p_decal, const Vector3 &p_size) override;
 	virtual void decal_set_texture(RID p_decal, RS::DecalTexture p_type, RID p_texture) override;
 	virtual void decal_set_emission_energy(RID p_decal, float p_energy) override;
 	virtual void decal_set_albedo_mix(RID p_decal, float p_mix) override;
@@ -495,22 +604,26 @@ public:
 	virtual void decal_set_normal_fade(RID p_decal, float p_fade) override;
 
 	virtual AABB decal_get_aabb(RID p_decal) const override;
+	virtual uint32_t decal_get_cull_mask(RID p_decal) const override { return 0; }
 
 	virtual void texture_add_to_decal_atlas(RID p_texture, bool p_panorama_to_dp = false) override {}
 	virtual void texture_remove_from_decal_atlas(RID p_texture, bool p_panorama_to_dp = false) override {}
 
 	/* DECAL INSTANCE */
 
-	virtual RID decal_instance_create(RID p_decal) override;
-	virtual void decal_instance_free(RID p_decal_instance) override;
-	virtual void decal_instance_set_transform(RID p_decal, const Transform3D &p_transform) override;
+	virtual RID decal_instance_create(RID p_decal) override { return RID(); }
+	virtual void decal_instance_free(RID p_decal_instance) override {}
+	virtual void decal_instance_set_transform(RID p_decal, const Transform3D &p_transform) override {}
+	virtual void decal_instance_set_sorting_offset(RID p_decal_instance, float p_sorting_offset) override {}
 
 	/* RENDER TARGET API */
 
 	static GLuint system_fbo;
 
-	RenderTarget *get_render_target(RID p_rid) { return render_target_owner.get_or_null(p_rid); };
-	bool owns_render_target(RID p_rid) { return render_target_owner.owns(p_rid); };
+	RenderTarget *get_render_target(RID p_rid) { return render_target_owner.get_or_null(p_rid); }
+	bool owns_render_target(RID p_rid) { return render_target_owner.owns(p_rid); }
+
+	void check_backbuffer(RenderTarget *rt, const bool uses_screen_texture, const bool uses_depth_texture);
 
 	virtual RID render_target_create() override;
 	virtual void render_target_free(RID p_rid) override;
@@ -527,11 +640,21 @@ public:
 	void render_target_clear_used(RID p_render_target);
 	virtual void render_target_set_msaa(RID p_render_target, RS::ViewportMSAA p_msaa) override;
 	virtual RS::ViewportMSAA render_target_get_msaa(RID p_render_target) const override;
+	virtual void render_target_set_msaa_needs_resolve(RID p_render_target, bool p_needs_resolve) override {}
+	virtual bool render_target_get_msaa_needs_resolve(RID p_render_target) const override { return false; }
+	virtual void render_target_do_msaa_resolve(RID p_render_target) override {}
+	virtual void render_target_set_use_hdr(RID p_render_target, bool p_use_hdr_2d) override;
+	virtual bool render_target_is_using_hdr(RID p_render_target) const override;
 
 	// new
 	void render_target_set_as_unused(RID p_render_target) override {
 		render_target_clear_used(p_render_target);
 	}
+
+	GLuint render_target_get_color_internal_format(RID p_render_target) const;
+	GLuint render_target_get_color_format(RID p_render_target) const;
+	GLuint render_target_get_color_type(RID p_render_target) const;
+	uint32_t render_target_get_color_format_size(RID p_render_target) const;
 
 	void render_target_request_clear(RID p_render_target, const Color &p_clear_color) override;
 	bool render_target_is_clear_requested(RID p_render_target) override;
@@ -539,9 +662,19 @@ public:
 	void render_target_disable_clear_request(RID p_render_target) override;
 	void render_target_do_clear_request(RID p_render_target) override;
 
-	void render_target_set_sdf_size_and_scale(RID p_render_target, RS::ViewportSDFOversize p_size, RS::ViewportSDFScale p_scale) override;
-	Rect2i render_target_get_sdf_rect(RID p_render_target) const override;
-	void render_target_mark_sdf_enabled(RID p_render_target, bool p_enabled) override;
+	GLuint render_target_get_fbo(RID p_render_target) const;
+	GLuint render_target_get_color(RID p_render_target) const;
+	GLuint render_target_get_depth(RID p_render_target) const;
+	void render_target_set_reattach_textures(RID p_render_target, bool p_reattach_textures) const;
+	bool render_target_is_reattach_textures(RID p_render_target) const;
+
+	virtual void render_target_set_sdf_size_and_scale(RID p_render_target, RS::ViewportSDFOversize p_size, RS::ViewportSDFScale p_scale) override;
+	virtual Rect2i render_target_get_sdf_rect(RID p_render_target) const override;
+	GLuint render_target_get_sdf_texture(RID p_render_target);
+	GLuint render_target_get_sdf_framebuffer(RID p_render_target);
+	void render_target_sdf_process(RID p_render_target);
+	virtual void render_target_mark_sdf_enabled(RID p_render_target, bool p_enabled) override;
+	bool render_target_is_sdf_enabled(RID p_render_target) const;
 
 	void render_target_copy_to_back_buffer(RID p_render_target, const Rect2i &p_region, bool p_gen_mipmaps);
 	void render_target_clear_back_buffer(RID p_render_target, const Rect2i &p_region, const Color &p_color);
@@ -549,17 +682,24 @@ public:
 
 	virtual void render_target_set_vrs_mode(RID p_render_target, RS::ViewportVRSMode p_mode) override {}
 	virtual RS::ViewportVRSMode render_target_get_vrs_mode(RID p_render_target) const override { return RS::VIEWPORT_VRS_DISABLED; }
+	virtual void render_target_set_vrs_update_mode(RID p_render_target, RS::ViewportVRSUpdateMode p_mode) override {}
+	virtual RS::ViewportVRSUpdateMode render_target_get_vrs_update_mode(RID p_render_target) const override { return RS::VIEWPORT_VRS_UPDATE_DISABLED; }
 	virtual void render_target_set_vrs_texture(RID p_render_target, RID p_texture) override {}
 	virtual RID render_target_get_vrs_texture(RID p_render_target) const override { return RID(); }
 
-	virtual void render_target_set_override_color(RID p_render_target, RID p_texture) override {}
-	virtual RID render_target_get_override_color(RID p_render_target) const override { return RID(); }
-	virtual void render_target_set_override_depth(RID p_render_target, RID p_texture) override {}
-	virtual RID render_target_get_override_depth(RID p_render_target) const override { return RID(); }
-	virtual void render_target_set_override_velocity(RID p_render_target, RID p_texture) override {}
-	virtual RID render_target_get_override_velocity(RID p_render_target) const override { return RID(); }
+	virtual void render_target_set_override(RID p_render_target, RID p_color_texture, RID p_depth_texture, RID p_velocity_texture, RID p_velocity_depth_texture) override;
+	virtual RID render_target_get_override_color(RID p_render_target) const override;
+	virtual RID render_target_get_override_depth(RID p_render_target) const override;
+	virtual RID render_target_get_override_velocity(RID p_render_target) const override;
+	virtual RID render_target_get_override_velocity_depth(RID p_render_target) const override { return RID(); }
+
+	virtual void render_target_set_render_region(RID p_render_target, const Rect2i &p_render_region) override;
+	virtual Rect2i render_target_get_render_region(RID p_render_target) const override;
 
 	virtual RID render_target_get_texture(RID p_render_target) override;
+
+	virtual void render_target_set_velocity_target_size(RID p_render_target, const Size2i &p_target_size) override {}
+	virtual Size2i render_target_get_velocity_target_size(RID p_render_target) const override { return Size2i(); }
 
 	void bind_framebuffer(GLuint framebuffer) {
 		glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
@@ -573,7 +713,7 @@ public:
 };
 
 inline String TextureStorage::get_framebuffer_error(GLenum p_status) {
-#if defined(DEBUG_ENABLED) && defined(GLES_OVER_GL)
+#if defined(DEBUG_ENABLED) && defined(GL_API_ENABLED)
 	if (p_status == GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT) {
 		return "GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT";
 	} else if (p_status == GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT) {

@@ -1,32 +1,32 @@
-/*************************************************************************/
-/*  easing_equations.h                                                   */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  easing_equations.h                                                    */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #ifndef EASING_EQUATIONS_H
 #define EASING_EQUATIONS_H
@@ -78,7 +78,8 @@ static real_t out_in(real_t t, real_t b, real_t c, real_t d) {
 	if (t < d / 2) {
 		return out(t * 2, b, c / 2, d);
 	}
-	return in(t * 2 - d, b + c / 2, c / 2, d);
+	real_t h = c / 2;
+	return in(t * 2 - d, b + h, h, d);
 }
 }; // namespace sine
 
@@ -104,7 +105,8 @@ static real_t out_in(real_t t, real_t b, real_t c, real_t d) {
 	if (t < d / 2) {
 		return out(t * 2, b, c / 2, d);
 	}
-	return in(t * 2 - d, b + c / 2, c / 2, d);
+	real_t h = c / 2;
+	return in(t * 2 - d, b + h, h, d);
 }
 }; // namespace quint
 
@@ -130,7 +132,8 @@ static real_t out_in(real_t t, real_t b, real_t c, real_t d) {
 	if (t < d / 2) {
 		return out(t * 2, b, c / 2, d);
 	}
-	return in(t * 2 - d, b + c / 2, c / 2, d);
+	real_t h = c / 2;
+	return in(t * 2 - d, b + h, h, d);
 }
 }; // namespace quart
 
@@ -157,7 +160,8 @@ static real_t out_in(real_t t, real_t b, real_t c, real_t d) {
 	if (t < d / 2) {
 		return out(t * 2, b, c / 2, d);
 	}
-	return in(t * 2 - d, b + c / 2, c / 2, d);
+	real_t h = c / 2;
+	return in(t * 2 - d, b + h, h, d);
 }
 }; // namespace quad
 
@@ -197,7 +201,8 @@ static real_t out_in(real_t t, real_t b, real_t c, real_t d) {
 	if (t < d / 2) {
 		return out(t * 2, b, c / 2, d);
 	}
-	return in(t * 2 - d, b + c / 2, c / 2, d);
+	real_t h = c / 2;
+	return in(t * 2 - d, b + h, h, d);
 }
 }; // namespace expo
 
@@ -264,7 +269,8 @@ static real_t out_in(real_t t, real_t b, real_t c, real_t d) {
 	if (t < d / 2) {
 		return out(t * 2, b, c / 2, d);
 	}
-	return in(t * 2 - d, b + c / 2, c / 2, d);
+	real_t h = c / 2;
+	return in(t * 2 - d, b + h, h, d);
 }
 }; // namespace elastic
 
@@ -293,7 +299,8 @@ static real_t out_in(real_t t, real_t b, real_t c, real_t d) {
 	if (t < d / 2) {
 		return out(t * 2, b, c / 2, d);
 	}
-	return in(t * 2 - d, b + c / 2, c / 2, d);
+	real_t h = c / 2;
+	return in(t * 2 - d, b + h, h, d);
 }
 }; // namespace cubic
 
@@ -322,7 +329,8 @@ static real_t out_in(real_t t, real_t b, real_t c, real_t d) {
 	if (t < d / 2) {
 		return out(t * 2, b, c / 2, d);
 	}
-	return in(t * 2 - d, b + c / 2, c / 2, d);
+	real_t h = c / 2;
+	return in(t * 2 - d, b + h, h, d);
 }
 }; // namespace circ
 
@@ -356,14 +364,16 @@ static real_t in_out(real_t t, real_t b, real_t c, real_t d) {
 	if (t < d / 2) {
 		return in(t * 2, b, c / 2, d);
 	}
-	return out(t * 2 - d, b + c / 2, c / 2, d);
+	real_t h = c / 2;
+	return out(t * 2 - d, b + h, h, d);
 }
 
 static real_t out_in(real_t t, real_t b, real_t c, real_t d) {
 	if (t < d / 2) {
 		return out(t * 2, b, c / 2, d);
 	}
-	return in(t * 2 - d, b + c / 2, c / 2, d);
+	real_t h = c / 2;
+	return in(t * 2 - d, b + h, h, d);
 }
 }; // namespace bounce
 
@@ -398,8 +408,38 @@ static real_t out_in(real_t t, real_t b, real_t c, real_t d) {
 	if (t < d / 2) {
 		return out(t * 2, b, c / 2, d);
 	}
-	return in(t * 2 - d, b + c / 2, c / 2, d);
+	real_t h = c / 2;
+	return in(t * 2 - d, b + h, h, d);
 }
 }; // namespace back
+
+namespace spring {
+static real_t out(real_t t, real_t b, real_t c, real_t d) {
+	t /= d;
+	real_t s = 1.0 - t;
+	t = (sin(t * Math_PI * (0.2 + 2.5 * t * t * t)) * pow(s, 2.2) + t) * (1.0 + (1.2 * s));
+	return c * t + b;
+}
+
+static real_t in(real_t t, real_t b, real_t c, real_t d) {
+	return c - out(d - t, 0, c, d) + b;
+}
+
+static real_t in_out(real_t t, real_t b, real_t c, real_t d) {
+	if (t < d / 2) {
+		return in(t * 2, b, c / 2, d);
+	}
+	real_t h = c / 2;
+	return out(t * 2 - d, b + h, h, d);
+}
+
+static real_t out_in(real_t t, real_t b, real_t c, real_t d) {
+	if (t < d / 2) {
+		return out(t * 2, b, c / 2, d);
+	}
+	real_t h = c / 2;
+	return in(t * 2 - d, b + h, h, d);
+}
+}; // namespace spring
 
 #endif // EASING_EQUATIONS_H

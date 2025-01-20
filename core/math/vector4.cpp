@@ -1,37 +1,38 @@
-/*************************************************************************/
-/*  vector4.cpp                                                          */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  vector4.cpp                                                           */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #include "vector4.h"
 
-#include "core/math/basis.h"
-#include "core/string/print_string.h"
+#include "core/math/math_funcs.h"
+#include "core/math/vector4i.h"
+#include "core/string/ustring.h"
 
 Vector4::Axis Vector4::min_axis_index() const {
 	uint32_t min_index = 0;
@@ -63,6 +64,10 @@ bool Vector4::is_equal_approx(const Vector4 &p_vec4) const {
 
 bool Vector4::is_zero_approx() const {
 	return Math::is_zero_approx(x) && Math::is_zero_approx(y) && Math::is_zero_approx(z) && Math::is_zero_approx(w);
+}
+
+bool Vector4::is_finite() const {
+	return Math::is_finite(x) && Math::is_finite(y) && Math::is_finite(z) && Math::is_finite(w);
 }
 
 real_t Vector4::length() const {
@@ -126,15 +131,16 @@ Vector4 Vector4::round() const {
 	return Vector4(Math::round(x), Math::round(y), Math::round(z), Math::round(w));
 }
 
-Vector4 Vector4::lerp(const Vector4 &p_to, const real_t p_weight) const {
-	return Vector4(
-			x + (p_weight * (p_to.x - x)),
-			y + (p_weight * (p_to.y - y)),
-			z + (p_weight * (p_to.z - z)),
-			w + (p_weight * (p_to.w - w)));
+Vector4 Vector4::lerp(const Vector4 &p_to, real_t p_weight) const {
+	Vector4 res = *this;
+	res.x = Math::lerp(res.x, p_to.x, p_weight);
+	res.y = Math::lerp(res.y, p_to.y, p_weight);
+	res.z = Math::lerp(res.z, p_to.z, p_weight);
+	res.w = Math::lerp(res.w, p_to.w, p_weight);
+	return res;
 }
 
-Vector4 Vector4::cubic_interpolate(const Vector4 &p_b, const Vector4 &p_pre_a, const Vector4 &p_post_b, const real_t p_weight) const {
+Vector4 Vector4::cubic_interpolate(const Vector4 &p_b, const Vector4 &p_pre_a, const Vector4 &p_post_b, real_t p_weight) const {
 	Vector4 res = *this;
 	res.x = Math::cubic_interpolate(res.x, p_b.x, p_pre_a.x, p_post_b.x, p_weight);
 	res.y = Math::cubic_interpolate(res.y, p_b.y, p_pre_a.y, p_post_b.y, p_weight);
@@ -143,7 +149,7 @@ Vector4 Vector4::cubic_interpolate(const Vector4 &p_b, const Vector4 &p_pre_a, c
 	return res;
 }
 
-Vector4 Vector4::cubic_interpolate_in_time(const Vector4 &p_b, const Vector4 &p_pre_a, const Vector4 &p_post_b, const real_t p_weight, const real_t &p_b_t, const real_t &p_pre_a_t, const real_t &p_post_b_t) const {
+Vector4 Vector4::cubic_interpolate_in_time(const Vector4 &p_b, const Vector4 &p_pre_a, const Vector4 &p_post_b, real_t p_weight, real_t p_b_t, real_t p_pre_a_t, real_t p_post_b_t) const {
 	Vector4 res = *this;
 	res.x = Math::cubic_interpolate_in_time(res.x, p_b.x, p_pre_a.x, p_post_b.x, p_weight, p_b_t, p_pre_a_t, p_post_b_t);
 	res.y = Math::cubic_interpolate_in_time(res.y, p_b.y, p_pre_a.y, p_post_b.y, p_weight, p_b_t, p_pre_a_t, p_post_b_t);
@@ -152,7 +158,7 @@ Vector4 Vector4::cubic_interpolate_in_time(const Vector4 &p_b, const Vector4 &p_
 	return res;
 }
 
-Vector4 Vector4::posmod(const real_t p_mod) const {
+Vector4 Vector4::posmod(real_t p_mod) const {
 	return Vector4(Math::fposmod(x, p_mod), Math::fposmod(y, p_mod), Math::fposmod(z, p_mod), Math::fposmod(w, p_mod));
 }
 
@@ -167,9 +173,22 @@ void Vector4::snap(const Vector4 &p_step) {
 	w = Math::snapped(w, p_step.w);
 }
 
+void Vector4::snapf(real_t p_step) {
+	x = Math::snapped(x, p_step);
+	y = Math::snapped(y, p_step);
+	z = Math::snapped(z, p_step);
+	w = Math::snapped(w, p_step);
+}
+
 Vector4 Vector4::snapped(const Vector4 &p_step) const {
 	Vector4 v = *this;
 	v.snap(p_step);
+	return v;
+}
+
+Vector4 Vector4::snappedf(real_t p_step) const {
+	Vector4 v = *this;
+	v.snapf(p_step);
 	return v;
 }
 
@@ -185,8 +204,20 @@ Vector4 Vector4::clamp(const Vector4 &p_min, const Vector4 &p_max) const {
 			CLAMP(w, p_min.w, p_max.w));
 }
 
+Vector4 Vector4::clampf(real_t p_min, real_t p_max) const {
+	return Vector4(
+			CLAMP(x, p_min, p_max),
+			CLAMP(y, p_min, p_max),
+			CLAMP(z, p_min, p_max),
+			CLAMP(w, p_min, p_max));
+}
+
 Vector4::operator String() const {
-	return "(" + String::num_real(x, false) + ", " + String::num_real(y, false) + ", " + String::num_real(z, false) + ", " + String::num_real(w, false) + ")";
+	return "(" + String::num_real(x, true) + ", " + String::num_real(y, true) + ", " + String::num_real(z, true) + ", " + String::num_real(w, true) + ")";
 }
 
 static_assert(sizeof(Vector4) == 4 * sizeof(real_t));
+
+Vector4::operator Vector4i() const {
+	return Vector4i(x, y, z, w);
+}

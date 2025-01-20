@@ -1,32 +1,32 @@
-/*************************************************************************/
-/*  convex_hull.cpp                                                      */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  convex_hull.cpp                                                       */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 /*
  * Based on Godot's patched VHACD-version of Bullet's btConvexHullComputer.
@@ -61,10 +61,8 @@ subject to the following restrictions:
 #include "core/error/error_macros.h"
 #include "core/math/aabb.h"
 #include "core/math/math_defs.h"
-#include "core/os/memory.h"
+#include "core/templates/oa_hash_map.h"
 #include "core/templates/paged_allocator.h"
-
-#include <string.h>
 
 //#define DEBUG_CONVEX_HULL
 //#define SHOW_ITERATIONS
@@ -76,15 +74,17 @@ subject to the following restrictions:
 
 #ifdef DEBUG_ENABLED
 #define CHULL_ASSERT(m_cond)                                     \
-	do {                                                         \
+	if constexpr (true) {                                        \
 		if (unlikely(!(m_cond))) {                               \
 			ERR_PRINT("Assertion \"" _STR(m_cond) "\" failed."); \
 		}                                                        \
-	} while (0)
+	} else                                                       \
+		((void)0)
 #else
 #define CHULL_ASSERT(m_cond) \
-	do {                     \
-	} while (0)
+	if constexpr (true) {    \
+	} else                   \
+		((void)0)
 #endif
 
 #if defined(DEBUG_CONVEX_HULL) || defined(SHOW_ITERATIONS)
@@ -201,7 +201,7 @@ public:
 		static Int128 mul(uint64_t a, uint64_t b);
 
 		Int128 operator-() const {
-			return Int128((uint64_t) - (int64_t)low, ~high + (low == 0));
+			return Int128(uint64_t(-int64_t(low)), ~high + (low == 0));
 		}
 
 		Int128 operator+(const Int128 &b) const {
@@ -343,31 +343,31 @@ public:
 		Rational128(int64_t p_value) {
 			if (p_value > 0) {
 				sign = 1;
-				this->numerator = p_value;
+				numerator = p_value;
 			} else if (p_value < 0) {
 				sign = -1;
-				this->numerator = -p_value;
+				numerator = -p_value;
 			} else {
 				sign = 0;
-				this->numerator = (uint64_t)0;
+				numerator = (uint64_t)0;
 			}
-			this->denominator = (uint64_t)1;
+			denominator = (uint64_t)1;
 			is_int_64 = true;
 		}
 
 		Rational128(const Int128 &p_numerator, const Int128 &p_denominator) {
 			sign = p_numerator.get_sign();
 			if (sign >= 0) {
-				this->numerator = p_numerator;
+				numerator = p_numerator;
 			} else {
-				this->numerator = -p_numerator;
+				numerator = -p_numerator;
 			}
 			int32_t dsign = p_denominator.get_sign();
 			if (dsign >= 0) {
-				this->denominator = p_denominator;
+				denominator = p_denominator;
 			} else {
 				sign = -sign;
-				this->denominator = -p_denominator;
+				denominator = -p_denominator;
 			}
 			is_int_64 = false;
 		}
@@ -595,9 +595,9 @@ private:
 		}
 	};
 
-	enum Orientation { NONE,
-		CLOCKWISE,
-		COUNTER_CLOCKWISE };
+	enum Orientation { ORIENTATION_NONE,
+		ORIENTATION_CLOCKWISE,
+		ORIENTATION_COUNTER_CLOCKWISE };
 
 	Vector3 scaling;
 	Vector3 center;
@@ -657,7 +657,7 @@ private:
 
 	Vector3 get_gd_normal(Face *p_face);
 
-	bool shift_face(Face *p_face, real_t p_amount, LocalVector<Vertex *> p_stack);
+	bool shift_face(Face *p_face, real_t p_amount, LocalVector<Vertex *> &p_stack);
 
 public:
 	~ConvexHullInternal() {
@@ -1139,13 +1139,13 @@ ConvexHullInternal::Orientation ConvexHullInternal::get_orientation(const Edge *
 			CHULL_ASSERT(!m.is_zero());
 			int64_t dot = n.dot(m);
 			CHULL_ASSERT(dot != 0);
-			return (dot > 0) ? COUNTER_CLOCKWISE : CLOCKWISE;
+			return (dot > 0) ? ORIENTATION_COUNTER_CLOCKWISE : ORIENTATION_CLOCKWISE;
 		}
-		return COUNTER_CLOCKWISE;
+		return ORIENTATION_COUNTER_CLOCKWISE;
 	} else if (p_prev->prev == p_next) {
-		return CLOCKWISE;
+		return ORIENTATION_CLOCKWISE;
 	} else {
-		return NONE;
+		return ORIENTATION_NONE;
 	}
 }
 
@@ -1175,7 +1175,7 @@ ConvexHullInternal::Edge *ConvexHullInternal::find_max_angle(bool p_ccw, const V
 					} else if ((cmp = cot.compare(p_min_cot)) < 0) {
 						p_min_cot = cot;
 						min_edge = e;
-					} else if ((cmp == 0) && (p_ccw == (get_orientation(min_edge, e, p_s, t) == COUNTER_CLOCKWISE))) {
+					} else if ((cmp == 0) && (p_ccw == (get_orientation(min_edge, e, p_s, t) == ORIENTATION_COUNTER_CLOCKWISE))) {
 						min_edge = e;
 					}
 				}
@@ -1374,7 +1374,7 @@ void ConvexHullInternal::merge(IntermediateHull &p_h0, IntermediateHull &p_h1) {
 				int64_t dot = (*e->target - *c0).dot(normal);
 				CHULL_ASSERT(dot <= 0);
 				if ((dot == 0) && ((*e->target - *c0).dot(t) > 0)) {
-					if (!start0 || (get_orientation(start0, e, s, Point32(0, 0, -1)) == CLOCKWISE)) {
+					if (!start0 || (get_orientation(start0, e, s, Point32(0, 0, -1)) == ORIENTATION_CLOCKWISE)) {
 						start0 = e;
 					}
 				}
@@ -1389,7 +1389,7 @@ void ConvexHullInternal::merge(IntermediateHull &p_h0, IntermediateHull &p_h1) {
 				int64_t dot = (*e->target - *c1).dot(normal);
 				CHULL_ASSERT(dot <= 0);
 				if ((dot == 0) && ((*e->target - *c1).dot(t) > 0)) {
-					if (!start1 || (get_orientation(start1, e, s, Point32(0, 0, -1)) == COUNTER_CLOCKWISE)) {
+					if (!start1 || (get_orientation(start1, e, s, Point32(0, 0, -1)) == ORIENTATION_COUNTER_CLOCKWISE)) {
 						start1 = e;
 					}
 				}
@@ -1774,7 +1774,7 @@ real_t ConvexHullInternal::shrink(real_t p_amount, real_t p_clamp_amount) {
 	return p_amount;
 }
 
-bool ConvexHullInternal::shift_face(Face *p_face, real_t p_amount, LocalVector<Vertex *> p_stack) {
+bool ConvexHullInternal::shift_face(Face *p_face, real_t p_amount, LocalVector<Vertex *> &p_stack) {
 	Vector3 orig_shift = get_gd_normal(p_face) * -p_amount;
 	if (scaling[0] != 0) {
 		orig_shift[0] /= scaling[0];
@@ -2149,10 +2149,11 @@ static int32_t get_vertex_copy(ConvexHullInternal::Vertex *p_vertex, LocalVector
 }
 
 real_t ConvexHullComputer::compute(const Vector3 *p_coords, int32_t p_count, real_t p_shrink, real_t p_shrink_clamp) {
+	vertices.clear();
+	edges.clear();
+	faces.clear();
+
 	if (p_count <= 0) {
-		vertices.clear();
-		edges.clear();
-		faces.clear();
 		return 0;
 	}
 
@@ -2161,15 +2162,8 @@ real_t ConvexHullComputer::compute(const Vector3 *p_coords, int32_t p_count, rea
 
 	real_t shift = 0;
 	if ((p_shrink > 0) && ((shift = hull.shrink(p_shrink, p_shrink_clamp)) < 0)) {
-		vertices.clear();
-		edges.clear();
-		faces.clear();
 		return shift;
 	}
-
-	vertices.clear();
-	edges.clear();
-	faces.clear();
 
 	LocalVector<ConvexHullInternal::Vertex *> old_vertices;
 	get_vertex_copy(hull.vertex_list, old_vertices);
@@ -2252,19 +2246,61 @@ Error ConvexHullComputer::convex_hull(const Vector<Vector3> &p_points, Geometry3
 
 	r_mesh.vertices = ch.vertices;
 
+	// Tag which face each edge belongs to
+	LocalVector<int32_t> edge_faces;
+	edge_faces.resize(ch.edges.size());
+
+	for (uint32_t i = 0; i < ch.edges.size(); i++) {
+		edge_faces[i] = -1;
+	}
+
+	for (uint32_t i = 0; i < ch.faces.size(); i++) {
+		const Edge *e_start = &ch.edges[ch.faces[i]];
+		const Edge *e = e_start;
+		do {
+			int64_t ofs = e - ch.edges.ptr();
+			edge_faces[ofs] = i;
+
+			e = e->get_next_edge_of_face();
+		} while (e != e_start);
+	}
+
 	// Copy the edges over. There's two "half-edges" for every edge, so we pick only one of them.
 	r_mesh.edges.resize(ch.edges.size() / 2);
+	OAHashMap<uint64_t, int32_t> edge_map(ch.edges.size() * 4); // The higher the capacity, the faster the insert
+
 	uint32_t edges_copied = 0;
 	for (uint32_t i = 0; i < ch.edges.size(); i++) {
+		ERR_CONTINUE(edge_faces[i] == -1); // Safety check.
+
 		uint32_t a = (&ch.edges[i])->get_source_vertex();
 		uint32_t b = (&ch.edges[i])->get_target_vertex();
 		if (a < b) { // Copy only the "canonical" edge. For the reverse edge, this will be false.
 			ERR_BREAK(edges_copied >= (uint32_t)r_mesh.edges.size());
-			r_mesh.edges.write[edges_copied].a = a;
-			r_mesh.edges.write[edges_copied].b = b;
+			r_mesh.edges[edges_copied].vertex_a = a;
+			r_mesh.edges[edges_copied].vertex_b = b;
+			r_mesh.edges[edges_copied].face_a = edge_faces[i];
+			r_mesh.edges[edges_copied].face_b = -1;
+
+			uint64_t key = a;
+			key <<= 32;
+			key |= b;
+			edge_map.insert(key, edges_copied);
+
 			edges_copied++;
+		} else {
+			uint64_t key = b;
+			key <<= 32;
+			key |= a;
+			int32_t index;
+			if (!edge_map.lookup(key, index)) {
+				ERR_PRINT("Invalid edge");
+			} else {
+				r_mesh.edges[index].face_b = edge_faces[i];
+			}
 		}
 	}
+
 	if (edges_copied != (uint32_t)r_mesh.edges.size()) {
 		ERR_PRINT("Invalid edge count.");
 	}
@@ -2273,7 +2309,7 @@ Error ConvexHullComputer::convex_hull(const Vector<Vector3> &p_points, Geometry3
 	for (uint32_t i = 0; i < ch.faces.size(); i++) {
 		const Edge *e_start = &ch.edges[ch.faces[i]];
 		const Edge *e = e_start;
-		Geometry3D::MeshData::Face &face = r_mesh.faces.write[i];
+		Geometry3D::MeshData::Face &face = r_mesh.faces[i];
 
 		do {
 			face.indices.push_back(e->get_target_vertex());
@@ -2284,8 +2320,8 @@ Error ConvexHullComputer::convex_hull(const Vector<Vector3> &p_points, Geometry3
 		// reverse indices: Godot wants clockwise, but this is counter-clockwise
 		if (face.indices.size() > 2) {
 			// reverse all but the first index.
-			int *indices = face.indices.ptrw();
-			for (int c = 0; c < (face.indices.size() - 1) / 2; c++) {
+			int *indices = face.indices.ptr();
+			for (uint32_t c = 0; c < (face.indices.size() - 1) / 2; c++) {
 				SWAP(indices[c + 1], indices[face.indices.size() - 1 - c]);
 			}
 		}
